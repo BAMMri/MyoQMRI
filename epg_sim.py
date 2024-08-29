@@ -50,7 +50,7 @@ def cpmg(N_in, excitation_alpha_in, refocus_alpha_in, EchoSpacing, T1, T2, magPr
     
     
     alpha_in = np.radians(alpha_in)
-    fa = np.ones((N_in), dtype = np.complex)*alpha_in # flip angle array
+    fa = np.ones((N_in), dtype = complex)*alpha_in # flip angle array
     
     N     = len(fa)
     Nt2   = 2*N                                 
@@ -73,8 +73,8 @@ def cpmg(N_in, excitation_alpha_in, refocus_alpha_in, EchoSpacing, T1, T2, magPr
     RelaxMatrix = np.concatenate( [np.ones((2,Nt2p1))*E2, np.ones((1,Nt2p1))*E1], axis = 0)
         
     # Generate state matrices Omega before and after RF: Eq.[26] in EPG-R
-    Omega_preRF  = np.zeros((3,Nt2p1), dtype = np.complex)
-    Omega_postRF = np.zeros((3,Nt2p1), dtype = np.complex)
+    Omega_preRF  = np.zeros((3,Nt2p1), dtype = complex)
+    Omega_postRF = np.zeros((3,Nt2p1), dtype = complex)
     
     # CPMG condition, with magnetization on +x
     Omega_postRF[0,0] = np.sin(np.radians(excitation_alpha_in)) # 1
@@ -82,7 +82,7 @@ def cpmg(N_in, excitation_alpha_in, refocus_alpha_in, EchoSpacing, T1, T2, magPr
     Omega_postRF[2,0] = np.cos(np.radians(excitation_alpha_in))
 
     
-    F0_vector_out = np.zeros( (N), dtype = np.complex )
+    F0_vector_out = np.zeros( (N), dtype = complex )
     
     def dephase(stateMatrix):
         outMatrix = np.zeros_like(stateMatrix)
@@ -103,7 +103,7 @@ def cpmg(N_in, excitation_alpha_in, refocus_alpha_in, EchoSpacing, T1, T2, magPr
         T = None
         # only recalculate matrix if the FA changed
         if fa[pn] not in TMatrices:
-            T = np.zeros((3,3), dtype = np.complex)
+            T = np.zeros((3,3), dtype = complex)
             T[0,0] =       np.cos(fa[pn]/2.0)**2
             T[0,1] =       np.sin(fa[pn]/2.0)**2
             T[0,2] = -1j * np.sin(fa[pn])
@@ -194,12 +194,12 @@ if __name__ == '__main__':
     plt.ion()
     
     def _signalCalc(T1, T2, B1Factor):
-        signal = np.zeros((NEchoes), dtype=np.complex)
+        signal = np.zeros((NEchoes), dtype=complex)
         for curFAIndex in range(0, len(sliceProf90)): #Slice profile
             signal += cpmg(NEchoes, sliceProf90[curFAIndex]*B1Factor, sliceProf180[curFAIndex]*B1Factor, echoSpacing, T1, T2, False)
         signal /= len(sliceProf90)
         
-        return np.abs(signal).astype(np.float)
+        return np.abs(signal).astype(float)
     
     
     

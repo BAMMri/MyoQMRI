@@ -27,7 +27,7 @@ import sys
 import muscle_bids.utils.image
 from dicomUtils import load3dDicom, save3dDicom
 from muscle_bids.utils.io import load_bids, save_bids
-from muscle_bids.converters import MeSeConverter, T2Converter, FFConverter, B1Converter
+from muscle_bids.converters import MeSeConverterSiemensMagnitude, T2Converter, FFConverter, B1Converter
 
 import numpy as np
 import numpy.linalg as linalg
@@ -54,6 +54,7 @@ refocusingFactor = 1.2
 parser = ArgumentParser(description='Fit a multiecho dataset')
 parser.add_argument('path', type=str, help='path to the dataset or to bids subject directory')
 parser.add_argument('--bids', '-b', dest='useBIDS',action='store_true', help='use muscle-BIDS format for input/output')
+parser.add_argument('--path-is-nifti', dest='path_is_nifti', action='store_true', help='set if path is pointing directly to a nifti file')
 parser.add_argument('--fit-type', '-y', metavar='T', dest='fitType', type=int, help='type of fitting: T=0: EPG, T=1: Single exponential, T=2: Double exponential (default: 0)', default=0)
 parser.add_argument('--fat-t2', '-f', metavar='T2', dest='fatT2', type=float, help=f'fat T2 (default: {fatT2:.0f})', default = fatT2)
 parser.add_argument('--noise-level', '-n', dest='noiselevel', metavar='N', type=int, help=f'noise level for thresholding (default: {NOISELEVEL})', default = NOISELEVEL)
@@ -94,6 +95,7 @@ refocusingFactor = args.refocusingFactor
 excProfilePath = args.excProfilePath
 refProfilePath = args.refProfilePath
 useBIDS = args.useBIDS
+path_is_nifti = args.path_is_nifti
 
 print("Base dir:", baseDir)
 print("NOISELEVEL:", NOISELEVEL)
@@ -152,11 +154,15 @@ else:
 
 
 if useBIDS:
-    meseFileNames = MeSeConverter.find(baseDir)
-    if not meseFileNames:
-        print('No compatible BIDS datasets found')
-        sys.exit(-1)
-    meseFileName = meseFileNames[0] # note: only taking the first dataset
+    if path_is_nifti:
+        meseFileName=baseDir
+        baseDir = os.path.dirname(meseFileName)
+    else:
+        meseFileNames = MeSeConverterSiemensMagnitude.find(baseDir)
+        if not meseFileNames:
+            print('No compatible BIDS datasets found')
+            sys.exit(-1)
+        meseFileName = meseFileNames[0] # note: only taking the first dataset
     med_volume = load_bids(meseFileName)
     dicomStack = med_volume.volume
     infos = None
@@ -369,7 +375,7 @@ def getFindBestMatchLocal(pComb, dictionary):
     dictionaryLocal = np.copy(dictionary)
     def findBestMatchLocal(signal):
         signal /= signal[0]
-        signalMatrix = np.repeat(signal**2, [len(pComb),1])
+        signalMatrix = np.tile(signal**2, [len(pComb),1])
         n = np.sum( (signalMatrix - dictionaryLocal) ** 2, axis = 1 ) #linalg.norm(signalMatrix - signals, axis = 1)
         return pComb[np.argmin(n)]
     return findBestMatchLocal
