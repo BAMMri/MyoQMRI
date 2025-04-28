@@ -17,7 +17,7 @@ except:
     sitk = None
         
 
-from padorcut import padorcut
+from .padorcut import padorcut
 
 # code by Satya Mallick from https://www.learnopencv.com/rotation-matrix-to-euler-angles/
 # Checks if a matrix is a valid rotation matrix.

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "MyoQMRI"
+version = "0.0.1"
+authors = [
+  {name="Jessica Schäper", email="jessica.schaeper@unibas.ch"},
+  {name="Francesco Santini", email="francesco.santini@unibas.ch"},
+]
+description = "A package for quantitative analysis of muscle MRI"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-only"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+  "numpy",
+  "scipy",
+  "pypulseq",
+  "nibabel",
+  "json",
+  "pycuda",
+  "skcuda",
+  "pydicom",
+  "progress",
+  "SimpleITK-SimpleElastix",
+  "matplotlib",
+  "ormir-mids>=0.1.1",
+  "twixtools",
+  "pymapvbvd",
+]
+
+[project.urls]
+Repository = "https://github.com/bammri/MyoQMRI"
+
+[project.scripts]
+waterT2 = "MyoQMRI.bin.waterT2:main"
+fatwater = "MyoQMRI.bin.fatwater:main"
+raw2nii_pulseq_mese_leg = "MyoQMRI.bin.raw2nii_pulseq_mese_leg:main"
+write_pulseq_mese_leg = "MyoQRI.bin.write_pulseq_mese_leg"

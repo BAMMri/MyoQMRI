@@ -20,7 +20,7 @@
 """
 from __future__ import print_function
 
-from epg_sim import cpmg
+from .epg_sim import cpmg
 import numpy as np
 import numpy.fft as fft
 import bisect
@@ -29,7 +29,7 @@ import numpy.linalg as linalg
 import scipy.optimize as optimize
 import matplotlib.pyplot as plt
 
-from SlrTransform import slr 
+from .SlrTransform import slr 
 from scipy.signal import freqz
 
 DATADIR = 'data'
