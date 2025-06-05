@@ -20,7 +20,7 @@
 """
 from __future__ import print_function
 
-from epg_sim import cpmg
+from .epg_sim import cpmg
 import numpy as np
 import numpy.fft as fft
 import bisect
@@ -29,7 +29,7 @@ import numpy.linalg as linalg
 import scipy.optimize as optimize
 import matplotlib.pyplot as plt
 
-from SlrTransform import slr 
+from .SlrTransform import slr 
 from scipy.signal import freqz
 
 DATADIR = 'data'
@@ -177,14 +177,14 @@ class FatFractionLookup:
         
     
     def _signalCalc(self, T1, T2, B1Factor):
-        signal = np.zeros((self.NEchoes), dtype=np.complex)
+        signal = np.zeros((self.NEchoes), dtype=complex)
         for curFAIndex in range(0, len(self.sliceProf90)): #Slice profile
             signal += cpmg(self.NEchoes, self.sliceProf90[curFAIndex]*B1Factor, self.sliceProf180[curFAIndex]*B1Factor, self.EchoSpacing, T1, T2, self.MagPreparePulse)
         #signal /= len(self.sliceProf90)
         signal /= signal.max()
         
 
-        return np.abs(signal).astype(np.float)
+        return np.abs(signal).astype(float)
                
     # returns T2 and B1
     def cpmgFit(self, yVector, T1):

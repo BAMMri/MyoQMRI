@@ -1,0 +1,31 @@
+{
+  "EchoTime": [
+    11.0,
+    22.0,
+    33.0,
+    44.0,
+    54.99999999999999,
+    66.0,
+    77.0,
+    88.0,
+    98.99999999999999,
+    109.99999999999999,
+    121.0,
+    132.0,
+    143.0,
+    154.0,
+    164.99999999999997,
+    176.0,
+    187.0
+  ],
+  "RefocusingFlipAngle": 180.0,
+  "SliceThickness": 7.0,
+  "Resolution": [
+    1.5625,
+    1.5625
+  ],
+  "FourthDimension": "EchoTime",
+  "ScanningSequence": "SE",
+  "MRAcquisitionType": "2D",
+  "PulseSequenceType": "Multi-echo Spin Echo"
+}

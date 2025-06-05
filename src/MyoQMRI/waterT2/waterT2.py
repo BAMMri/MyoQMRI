@@ -22,10 +22,14 @@
 
 from __future__ import print_function
 
-from dicomUtils import load3dDicom, save3dDicom
+import sys
+
+import muscle_bids.utils.image
+from .dicomUtils import load3dDicom, save3dDicom
+from ormir_mids.utils.io import load_bids, save_bids
+from ormir_mids.converters import MeSeConverterSiemensMagnitude, T2Converter, FFConverter, B1Converter
 
 import numpy as np
-import numpy.matlib as matlib
 import numpy.linalg as linalg
 import matplotlib.pyplot as plt
 import os
@@ -46,155 +50,6 @@ t2Lim = (20,80)
 #t2Lim = (50,600)
 b1Lim = (0.5,1.2)
 refocusingFactor = 1.2
-
-parser = ArgumentParser(description='Fit a multiecho dataset')
-parser.add_argument('path', type=str, help='path to the dataset')
-parser.add_argument('--fit-type', '-y', metavar='T', dest='fitType', type=int, help='type of fitting: T=0: EPG, T=1: Single exponential, T=2: Double exponential (default: 0)', default=0)
-parser.add_argument('--fat-t2', '-f', metavar='T2', dest='fatT2', type=float, help=f'fat T2 (default: {fatT2:.0f})', default = fatT2)
-parser.add_argument('--noise-level', '-n', dest='noiselevel', metavar='N', type=int, help=f'noise level for thresholding (default: {NOISELEVEL})', default = NOISELEVEL)
-parser.add_argument('--nthreads', '-t', dest='nthreads', metavar='T', type=int, help=f'number of threads to be used for fitting (default: {cpu_count()})', default = cpu_count())
-parser.add_argument('--plot-level', '-p', metavar='L', dest='doplot', type=int, help='do a live plot of the fitting (L=0: no plot, L=1: show the images, L=2: show images and signals)', default=DOPLOT)
-parser.add_argument('--t2-limits', metavar=('min', 'max'), dest='t2Lim', type=int, nargs=2, help=f'set the limits for t2 calculation (default: {t2Lim[0]}-{t2Lim[1]})', default = t2Lim)
-parser.add_argument('--b1-limits', metavar=('min', 'max'), dest='b1Lim', type=float, nargs=2, help=f'set the limits for b1 calculation (default: {b1Lim[0]:.1f}-{b1Lim[1]:.1f})', default = b1Lim)
-parser.add_argument('--use-gpu', '-g', dest='useGPU',action='store_true', help='use GPU for fitting')
-parser.add_argument('--ff-map', '-m', metavar='dir', dest='ffMapDir', type=str, help='load a fat fraction map', default='')
-parser.add_argument('--register-ff', '-r', dest='regFF', action='store_true', help='register the fat fraction dataset')
-parser.add_argument('--etl-limit', '-e', metavar='N', dest='etlLimit', type=int, help='reduce the echo train length', default=0)
-parser.add_argument('--out-suffix', '-s', metavar='ext', dest='outSuffix', type=str, help='add a suffix to the output map directories', default='')
-parser.add_argument('--slice-range', '-l', metavar=('start', 'end'), dest='sliceRange', type=int, nargs=2, help='Restrict the fitting to a subset of slices', default=(None, None))
-parser.add_argument('--refocusing-width', '-w', metavar='factor', dest='refocusingFactor', type=float, help=f'Slice width of the refocusing pulse with respect to the excitation (default {refocusingFactor}) (Siemens standard)', default=refocusingFactor)
-parser.add_argument('--exc-profile', metavar='path', dest='excProfilePath', type=str, help='Path to the excitation slice profile file', default=None)
-parser.add_argument('--ref-profile', metavar='path', dest='refProfilePath', type=str, help='Path to the refocusing slice profile file', default=None)
-
-
-
-args = parser.parse_args()
-
-
-NOISELEVEL = args.noiselevel
-fatT2 = args.fatT2
-baseDir = args.path
-NTHREADS = args.nthreads
-DOPLOT = args.doplot
-t2Lim = args.t2Lim
-b1Lim = args.b1Lim
-useGPU = args.useGPU
-ffMapDir = args.ffMapDir
-etlLimit = args.etlLimit
-regFF = args.regFF
-outSuffix = args.outSuffix
-fitType = args.fitType
-sliceRange = args.sliceRange
-refocusingFactor = args.refocusingFactor
-excProfilePath = args.excProfilePath
-refProfilePath = args.refProfilePath
-
-print("Base dir:", baseDir)
-print("NOISELEVEL:", NOISELEVEL)
-print("Fit type:", fitType)
-print("Fat T2:", fatT2)
-print("N Threads:", NTHREADS)
-print("PLot level:", DOPLOT)
-print("T2 limits", t2Lim)
-print("B1 limits", b1Lim)
-print("Use GPU", useGPU)
-print("FF Map Dir", ffMapDir)
-print("Reg FF", regFF)
-print("ETL limit", etlLimit)
-print("Output suffix", outSuffix)
-print("Slice Range", sliceRange)
-print("Refocusing Factor", refocusingFactor)
-print("Excitation slice profile", excProfilePath)
-print("Refocusing slice profile", refProfilePath)
-
-refocusingFactor -= 1.0 # the actual parameter passed must be 0.2
-
-assert useGPU or ffMapDir == '' or NTHREADS == 1, "FF map can only be used with a single thread"
-assert NTHREADS == 1 or fitType == 0, "Only EPG fitting can be used with multiple threads"
-assert not useGPU or fitType == 0, "Only EPG fitting is supported on the GPU"
-assert (excProfilePath is None and excProfilePath is None) or (excProfilePath is not None and excProfilePath is not None), "Either both slice profiles are specified, or neither is"
-
-excProfile = None
-refProfile = None
-
-if excProfilePath:
-    excProfile = np.loadtxt(excProfilePath)
-
-if refProfilePath:
-    refProfile = np.loadtxt(refProfilePath)
-    
-if excProfile is not None:
-    assert excProfile.shape == refProfile.shape and excProfile.ndim == 1, "Slice profiles must be one-dimensional vectors and contain the same number of samples"
-
-
-###########################################################
-## Initialization
-###########################################################    
-
-if useGPU:
-    import pycuda.driver as cuda
-    import pycuda.autoinit
-    import skcuda.linalg as sklinalg
-    import skcuda.misc as skmisc
-    from FatFractionLookup_GPU import FatFractionLookup_GPU as FatFractionLookup
-    import findmax_ff
-    
-    skmisc.init()
-    NTHREADS = 1
-else:
-    from FatFractionLookup import FatFractionLookup
-    
-[dicomStack, infos] = load3dDicom(baseDir)
-
-etl = int(infos[0].EchoTrainLength)
-echoSpacing = float(infos[0].EchoTime)
-
-oldShape = dicomStack.shape
-newShape = (oldShape[0], oldShape[1], etl, int(oldShape[2]/etl))
-
-print(newShape)
-
-nSlices = newShape[3] 
-
-if not any(sliceRange): sliceRange = (0, nSlices)
-
-assert sliceRange[0] >= 0 and sliceRange[1] <= nSlices, "Selected slice range is out of bound"
-
-dicomStack = dicomStack.reshape(newShape).swapaxes(2,3) # reorder as slice, etl instead of etl, slices
-
-if etlLimit > 0 and etlLimit < etl:
-    dicomStack = dicomStack[:,:,:,:etlLimit]
-    etl = etlLimit
-
-print("Echo Train Length:", etl)
-print("Echo spacing:", echoSpacing)
-
-newShape = dicomStack.shape
-
-infoOut = infos[:nSlices]
-
-plt.ion()
-
-ffl = None
-
-if fatT2 <= 0:
-    ffl = FatFractionLookup(t2Lim, b1Lim, INITIAL_FATT2, etl, echoSpacing, refocusingFactor)
-    if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
-else:
-    ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor)
-    if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
-    
-if fitType == 0:
-    parameterCombinations, signals = ffl.getAllSignals()
-    signals = signals **2 # weight by magnitude
-    #print("Signals are Nan", np.any(np.isnan(signals)))
-    signorms = linalg.norm(signals, axis=1, keepdims=True)
-    signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
-    signalsNormalized = signals/signormsRep
-    #print("Signal Norm  are nan", np.any(np.isnan(signalsNormalized)))
-
-signalsFF = None
-parameterCombinationsFF = None
 
 
 ###########################################################
@@ -335,7 +190,7 @@ def getFindBestMatchLocal(pComb, dictionary):
     dictionaryLocal = np.copy(dictionary)
     def findBestMatchLocal(signal):
         signal /= signal[0]
-        signalMatrix = matlib.repmat(signal**2, len(pComb),1)
+        signalMatrix = np.tile(signal**2, [len(pComb),1])
         n = np.sum( (signalMatrix - dictionaryLocal) ** 2, axis = 1 ) #linalg.norm(signalMatrix - signals, axis = 1)
         return pComb[np.argmin(n)]
     return findBestMatchLocal
@@ -576,110 +431,329 @@ def plotImages():
     plt.title("FF")
     plt.pause(0.001)
 
+def main():
+    parser = ArgumentParser(description='Fit a multiecho dataset')
+    parser.add_argument('path', type=str, help='path to the dataset or to bids subject directory')
+    parser.add_argument('--bids', '-b', dest='useBIDS',action='store_true', help='use muscle-BIDS format for input/output')
+    parser.add_argument('--path-is-nifti', dest='path_is_nifti', action='store_true', help='set if path is pointing directly to a nifti file')
+    parser.add_argument('--fit-type', '-y', metavar='T', dest='fitType', type=int, help='type of fitting: T=0: EPG, T=1: Single exponential, T=2: Double exponential (default: 0)', default=0)
+    parser.add_argument('--fat-t2', '-f', metavar='T2', dest='fatT2', type=float, help=f'fat T2 (default: {fatT2:.0f})', default = fatT2)
+    parser.add_argument('--noise-level', '-n', dest='noiselevel', metavar='N', type=int, help=f'noise level for thresholding (default: {NOISELEVEL})', default = NOISELEVEL)
+    parser.add_argument('--nthreads', '-t', dest='nthreads', metavar='T', type=int, help=f'number of threads to be used for fitting (default: {cpu_count()})', default = cpu_count())
+    parser.add_argument('--plot-level', '-p', metavar='L', dest='doplot', type=int, help='do a live plot of the fitting (L=0: no plot, L=1: show the images, L=2: show images and signals)', default=DOPLOT)
+    parser.add_argument('--t2-limits', metavar=('min', 'max'), dest='t2Lim', type=int, nargs=2, help=f'set the limits for t2 calculation (default: {t2Lim[0]}-{t2Lim[1]})', default = t2Lim)
+    parser.add_argument('--b1-limits', metavar=('min', 'max'), dest='b1Lim', type=float, nargs=2, help=f'set the limits for b1 calculation (default: {b1Lim[0]:.1f}-{b1Lim[1]:.1f})', default = b1Lim)
+    parser.add_argument('--use-gpu', '-g', dest='useGPU',action='store_true', help='use GPU for fitting')
+    parser.add_argument('--ff-map', '-m', metavar='dir', dest='ffMapDir', type=str, help='load a fat fraction map', default='')
+    parser.add_argument('--register-ff', '-r', dest='regFF', action='store_true', help='register the fat fraction dataset')
+    parser.add_argument('--etl-limit', '-e', metavar='N', dest='etlLimit', type=int, help='reduce the echo train length', default=0)
+    parser.add_argument('--out-suffix', '-s', metavar='ext', dest='outSuffix', type=str, help='add a suffix to the output map directories', default='')
+    parser.add_argument('--slice-range', '-l', metavar=('start', 'end'), dest='sliceRange', type=int, nargs=2, help='Restrict the fitting to a subset of slices', default=(None, None))
+    parser.add_argument('--refocusing-width', '-w', metavar='factor', dest='refocusingFactor', type=float, help=f'Slice width of the refocusing pulse with respect to the excitation (default {refocusingFactor}) (Siemens standard)', default=refocusingFactor)
+    parser.add_argument('--exc-profile', metavar='path', dest='excProfilePath', type=str, help='Path to the excitation slice profile file', default=None)
+    parser.add_argument('--ref-profile', metavar='path', dest='refProfilePath', type=str, help='Path to the refocusing slice profile file', default=None)
 
-## Main program
-
-outShape = newShape[0:3]    
-
-t = time.time()
 
 
-# multiprocess fitting
-if NTHREADS != 1:
-    if NTHREADS:
-        p = Pool(NTHREADS)
-    else:
-        p = Pool() # automatic number of processes
-    
-    dicomStack2 = np.zeros_like(dicomStack)
-    dicomStack2[:,:,slice(*sliceRange),:] = dicomStack[:,:,slice(*sliceRange),:]
-    
-    resultList = np.array(p.map(fitMultiProcess, dicomStack2))
-    #resultList = np.array(p.map(fitMultiProcess, dicomStack)) # no processes
-    # remap list
-    t2 = resultList[:,0,:,:].squeeze()
-    b1 = resultList[:,1,:,:].squeeze()
-    ff = resultList[:,2,:,:].squeeze()
-            
-    p.close()
-    p.join()
-    
-else:
-# single-process fitting
-    t2 = np.zeros(outShape)
-    b1 = np.zeros(outShape)
-    if ffMapDir:
-        ff, ffInfo = load3dDicom(ffMapDir)
+    args = parser.parse_args()
+
+
+    NOISELEVEL = args.noiselevel
+    fatT2 = args.fatT2
+    baseDir = args.path
+    NTHREADS = args.nthreads
+    DOPLOT = args.doplot
+    t2Lim = args.t2Lim
+    b1Lim = args.b1Lim
+    useGPU = args.useGPU
+    ffMapDir = args.ffMapDir
+    etlLimit = args.etlLimit
+    regFF = args.regFF
+    outSuffix = args.outSuffix
+    fitType = args.fitType
+    sliceRange = args.sliceRange
+    refocusingFactor = args.refocusingFactor
+    excProfilePath = args.excProfilePath
+    refProfilePath = args.refProfilePath
+    useBIDS = args.useBIDS
+    path_is_nifti = args.path_is_nifti
+
+    print("Base dir:", baseDir)
+    print("NOISELEVEL:", NOISELEVEL)
+    print("Fit type:", fitType)
+    print("Fat T2:", fatT2)
+    print("N Threads:", NTHREADS)
+    print("PLot level:", DOPLOT)
+    print("T2 limits", t2Lim)
+    print("B1 limits", b1Lim)
+    print("Use GPU", useGPU)
+    print("FF Map Dir", ffMapDir)
+    print("Reg FF", regFF)
+    print("ETL limit", etlLimit)
+    print("Output suffix", outSuffix)
+    print("Slice Range", sliceRange)
+    print("Refocusing Factor", refocusingFactor)
+    print("Excitation slice profile", excProfilePath)
+    print("Refocusing slice profile", refProfilePath)
+
+    refocusingFactor -= 1.0 # the actual parameter passed must be 0.2
+
+    assert useGPU or ffMapDir == '' or NTHREADS == 1, "FF map can only be used with a single thread"
+    assert NTHREADS == 1 or fitType == 0, "Only EPG fitting can be used with multiple threads"
+    assert not useGPU or fitType == 0, "Only EPG fitting is supported on the GPU"
+    assert (excProfilePath is None and excProfilePath is None) or (excProfilePath is not None and excProfilePath is not None), "Either both slice profiles are specified, or neither is"
+
+    excProfile = None
+    refProfile = None
+
+    if excProfilePath:
+        excProfile = np.loadtxt(excProfilePath)
+
+    if refProfilePath:
+        refProfile = np.loadtxt(refProfilePath)
         
-        # registration of the ff dataset
-        if not regFF and ff.shape != dicomStack[:,:,:,0].squeeze().shape:
-            print("Fat Fraction and T2 datasets have different shapes. Registration forced")
-            regFF = True
-        if regFF:
-            from registerDatasets import calcTransform2DStack
-            print("Registering the FF dataset")
-            transf = calcTransform2DStack(dicomStack[:,:,:,0], infoOut, ff, ffInfo)
-            ff = transf(ff)
+    if excProfile is not None:
+        assert excProfile.shape == refProfile.shape and excProfile.ndim == 1, "Slice profiles must be one-dimensional vectors and contain the same number of samples"
 
-        ff[ff<0] = 0
-        ff[ff>2**15] = 0 # sometimes there is a problem with saving signed/unsigned ff values
-        while ff.max() > 7: # rescale ff
-            ff /= 10
-        # print(ff.max())
-    else:
-        ff = np.zeros(outShape)
-    
+
+    ###########################################################
+    ## Initialization
+    ###########################################################    
+
     if useGPU:
-        signorms = linalg.norm(signals, axis=1, keepdims=True)
-        signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
-        signormsGPU = pycuda.gpuarray.to_gpu(signormsRep.astype(np.float32))
-        signalsGPU = pycuda.gpuarray.to_gpu(signals.astype(np.float32))
-        signalsGPU = sklinalg.transpose(skmisc.divide(signalsGPU, signormsGPU))
-        del signormsGPU
-        ROWSTEP = 14
-                
-    if fitType == 0:
-        signorms = linalg.norm(signals, axis=1, keepdims=True)
-        signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
-        signalsCPU = np.transpose( signals / signormsRep)
-        ROWSTEP = 14
+        import pycuda.driver as cuda
+        import pycuda.autoinit
+        import skcuda.linalg as sklinalg
+        import skcuda.misc as skmisc
+        from .FatFractionLookup_GPU import FatFractionLookup_GPU as FatFractionLookup
+        import findmax_ff
         
-    for slc in range(*sliceRange):
-        print(slc)
-        if fatT2 <= 0:            
-            print("Searching fat...")
-            fatT2 = fitSlc(int((sliceRange[1]-sliceRange[0])/2+sliceRange[0]), True, t2, b1, ff)
-            ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor)
-            if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
-            parameterCombinations, signals = ffl.getAllSignals()
-            signals = signals **2 # weight by magnitude
+        skmisc.init()
+        NTHREADS = 1
+    else:
+        from .FatFractionLookup import FatFractionLookup
+
+
+    if useBIDS:
+        if path_is_nifti:
+            meseFileName=baseDir
+            baseDir = os.path.dirname(meseFileName)
+        else:
+            meseFileNames = MeSeConverterSiemensMagnitude.find(baseDir)
+            if not meseFileNames:
+                print('No compatible BIDS datasets found')
+                sys.exit(-1)
+            meseFileName = meseFileNames[0] # note: only taking the first dataset
+        med_volume = load_bids(meseFileName)
+        dicomStack = med_volume.volume
+        infos = None
+        etl = dicomStack.shape[3]
+        echoSpacing = med_volume.bids_header['EchoTime'][0]
+
+        if excProfile is None: # see if slice profiles are stored in BIDS
+            try:
+                excProfile = np.array(med_volume.bids_header['ExcitationProfile'])
+            except KeyError:
+                pass
+
+            try:
+                refProfile = np.array(med_volume.bids_header['RefocusingProfile'])
+            except KeyError:
+                pass
+
+        if excProfile is not None:
+            assert excProfile.shape == refProfile.shape and excProfile.ndim == 1, "Slice profiles must be one-dimensional vectors and contain the same number of samples"
+
+    else: # load DICOM
+        [dicomStack, infos] = load3dDicom(baseDir)
+
+        etl = int(infos[0].EchoTrainLength)
+        echoSpacing = float(infos[0].EchoTime)
+
+        oldShape = dicomStack.shape
+        newShape = (oldShape[0], oldShape[1], etl, int(oldShape[2]/etl))
+
+        print(newShape)
+
+        nSlices = newShape[3]
+
+        if not any(sliceRange): sliceRange = (0, nSlices)
+
+        assert sliceRange[0] >= 0 and sliceRange[1] <= nSlices, "Selected slice range is out of bound"
+
+        dicomStack = dicomStack.reshape(newShape).swapaxes(2,3) # reorder as slice, etl instead of etl, slices
+
+        infoOut = infos[:nSlices]
+
+    if etlLimit > 0 and etlLimit < etl:
+        dicomStack = dicomStack[:, :, :, :etlLimit]
+        etl = etlLimit
+
+    print("Echo Train Length:", etl)
+    print("Echo spacing:", echoSpacing)
+
+    newShape = dicomStack.shape
+
+    plt.ion()
+
+    ffl = None
+
+    if fatT2 <= 0:
+        ffl = FatFractionLookup(t2Lim, b1Lim, INITIAL_FATT2, etl, echoSpacing, refocusingFactor)
+        if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
+    else:
+        ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor)
+        if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
+        
+    if fitType == 0:
+        parameterCombinations, signals = ffl.getAllSignals()
+        signals = signals **2 # weight by magnitude
+        #print("Signals are Nan", np.any(np.isnan(signals)))
+        signorms = linalg.norm(signals, axis=1, keepdims=True)
+        signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
+        signalsNormalized = signals/signormsRep
+        #print("Signal Norm  are nan", np.any(np.isnan(signalsNormalized)))
+
+    signalsFF = None
+    parameterCombinationsFF = None
+
+
+    ## Main program
+
+    outShape = newShape[0:3]    
+
+    t = time.time()
+
+
+    # multiprocess fitting
+    if NTHREADS != 1:
+        if NTHREADS:
+            p = Pool(NTHREADS)
+        else:
+            p = Pool() # automatic number of processes
+        
+        dicomStack2 = np.zeros_like(dicomStack)
+        dicomStack2[:,:,slice(*sliceRange),:] = dicomStack[:,:,slice(*sliceRange),:]
+        
+        resultList = np.array(p.map(fitMultiProcess, dicomStack2))
+        #resultList = np.array(p.map(fitMultiProcess, dicomStack)) # no processes
+        # remap list
+        t2 = resultList[:,0,:,:].squeeze()
+        b1 = resultList[:,1,:,:].squeeze()
+        ff = resultList[:,2,:,:].squeeze()
+                
+        p.close()
+        p.join()
+        
+    else:
+    # single-process fitting
+        t2 = np.zeros(outShape)
+        b1 = np.zeros(outShape)
+        if ffMapDir:
+            if useBIDS:
+                ffMapFile = FFConverter.find(ffMapDir)
+                if not ffMapFile:
+                    print('Cannot find FF map')
+                    sys.exit(-1)
+                ff_med_volume = load_bids(ffMapFile[0])
+                ff = ff_med_volume.volume
+            else:
+                ff, ffInfo = load3dDicom(ffMapDir)
+            
+            # registration of the ff dataset
+            if not regFF and ff.shape != dicomStack[:,:,:,0].squeeze().shape:
+                print("Fat Fraction and T2 datasets have different shapes. Registration forced")
+                regFF = True
+            if regFF:
+                if useBIDS:
+                    ff_aligned = muscle_bids.utils.image.realign_medical_volume(ff_med_volume, med_volume)
+                    ff = ff_aligned.volume
+                else:
+                    from .registerDatasets import calcTransform2DStack
+                    print("Registering the FF dataset")
+                    transf = calcTransform2DStack(dicomStack[:,:,:,0], infoOut, ff, ffInfo)
+                    ff = transf(ff)
+
+            ff[ff<0] = 0
+            ff[ff>2**15] = 0 # sometimes there is a problem with saving signed/unsigned ff values
+            while ff.max() > 7: # rescale ff
+                ff /= 10
+            # print(ff.max())
+        else:
+            ff = np.zeros(outShape)
+        
+        if useGPU:
             signorms = linalg.norm(signals, axis=1, keepdims=True)
             signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
-            signalsNormalized = signals/signormsRep
-            if useGPU:
+            signormsGPU = pycuda.gpuarray.to_gpu(signormsRep.astype(np.float32))
+            signalsGPU = pycuda.gpuarray.to_gpu(signals.astype(np.float32))
+            signalsGPU = sklinalg.transpose(skmisc.divide(signalsGPU, signormsGPU))
+            del signormsGPU
+            ROWSTEP = 14
+                    
+        if fitType == 0:
+            signorms = linalg.norm(signals, axis=1, keepdims=True)
+            signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
+            signalsCPU = np.transpose( signals / signormsRep)
+            ROWSTEP = 14
+            
+        for slc in range(*sliceRange):
+            print(slc)
+            if fatT2 <= 0:            
+                print("Searching fat...")
+                fatT2 = fitSlc(int((sliceRange[1]-sliceRange[0])/2+sliceRange[0]), True, t2, b1, ff)
+                ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor)
+                if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
+                parameterCombinations, signals = ffl.getAllSignals()
+                signals = signals **2 # weight by magnitude
                 signorms = linalg.norm(signals, axis=1, keepdims=True)
                 signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
-                signormsGPU = pycuda.gpuarray.to_gpu(signormsRep.astype(np.float32))
-                signalsGPU = pycuda.gpuarray.to_gpu(signals.astype(np.float32))
-                signalsGPU = sklinalg.transpose(skmisc.divide(signalsGPU, signormsGPU))
-                del signormsGPU
-          
-        if useGPU:
-            fitSlcGPU(slc, False, t2, b1, ff)
-        else:
-            if fitType == 1:
-                fitSlcNLin(slc, singleExpFit, t2, b1, ff)
-            elif fitType == 2:
-                fitSlcNLin(slc, doubleExpFit, t2, b1, ff)
+                signalsNormalized = signals/signormsRep
+                if useGPU:
+                    signorms = linalg.norm(signals, axis=1, keepdims=True)
+                    signormsRep = np.repeat(signorms, signals.shape[1], axis=1)
+                    signormsGPU = pycuda.gpuarray.to_gpu(signormsRep.astype(np.float32))
+                    signalsGPU = pycuda.gpuarray.to_gpu(signals.astype(np.float32))
+                    signalsGPU = sklinalg.transpose(skmisc.divide(signalsGPU, signormsGPU))
+                    del signormsGPU
+              
+            if useGPU:
+                fitSlcGPU(slc, False, t2, b1, ff)
             else:
-                if ffMapDir:
-                    fitSlc(slc, False, t2, b1, ff)
+                if fitType == 1:
+                    fitSlcNLin(slc, singleExpFit, t2, b1, ff)
+                elif fitType == 2:
+                    fitSlcNLin(slc, doubleExpFit, t2, b1, ff)
                 else:
-                    fitSlcFast(slc, False, t2, b1, ff)
+                    if ffMapDir:
+                        fitSlc(slc, False, t2, b1, ff)
+                    else:
+                        fitSlcFast(slc, False, t2, b1, ff)
 
-print("Elapsed time", time.time() - t)
+    print("Elapsed time", time.time() - t)
 
-save3dDicom(t2*10, infoOut, os.path.join(baseDir, 't2' + outSuffix), 97)
-save3dDicom(b1*100, infoOut, os.path.join(baseDir, 'b1' + outSuffix), 98)
-save3dDicom(ff*100, infoOut, os.path.join(baseDir, 'ff' + outSuffix), 99)
-    
+    if useBIDS:
+        single_echo_volume = muscle_bids.utils.reduce(med_volume, 0) # get a single echo volume from the original multi echo
+        t2_med_volume = T2Converter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, t2))
+        b1_med_volume = B1Converter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, b1))
+        ff_med_volume = FFConverter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, ff))
+        patient_base_name = os.path.basename(baseDir)
+
+        def save_dataset(dataset, converter):
+            save_bids(os.path.join(baseDir,
+                                   converter.get_directory(),
+                                   converter.get_file_name(patient_base_name) + '.nii.gz' ),
+                      dataset)
+
+        save_dataset(t2_med_volume, T2Converter)
+        save_dataset(b1_med_volume, B1Converter)
+        save_dataset(ff_med_volume, FFConverter)
+
+    else:
+        save3dDicom(t2*10, infoOut, os.path.join(baseDir, 't2' + outSuffix), 97)
+        save3dDicom(b1*100, infoOut, os.path.join(baseDir, 'b1' + outSuffix), 98)
+        save3dDicom(ff*100, infoOut, os.path.join(baseDir, 'ff' + outSuffix), 99)
+        
+if __name__ == '__main__':
+    main()
+
