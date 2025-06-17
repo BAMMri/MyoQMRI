@@ -6,7 +6,7 @@ import numpy as np
 import pypulseq as pp
 
 
-def main(plot: bool, write_seq: bool, seq_filename: str = "mese_leg"):
+def main(seq_filename: str = "mese_leg"):
     # ======
     # SETUP
     # ======
@@ -243,8 +243,6 @@ def main(plot: bool, write_seq: bool, seq_filename: str = "mese_leg"):
     # Prepare RF offsets. This is required for multi-slice acquisition
     delta_z = (n_slices - 1)  * (slice_gap + slice_thickness)
     z = np.linspace((-delta_z / 2), (delta_z / 2), n_slices) + rf_offset
-    print(delta_z)
-    print(z)
     
     seq.add_block(pp.make_label(label="REV", type="SET", value=1)) # whyyyy?
     for i in range(Ny):
@@ -310,35 +308,28 @@ def main(plot: bool, write_seq: bool, seq_filename: str = "mese_leg"):
         print("Timing check failed. Error listing follows:")
         #[print(e) for e in error_report]
     
-    # ======
-    # VISUALIZATION
-    # ======
-    if plot:
-        seq.plot()
-    
     # =========
     # WRITE .SEQ
     # =========
-    if write_seq:
-        seq.set_definition(key="FOV", value=[fov_x, fov_y, delta_z+slice_thickness])
-        seq.set_definition(key="Name", value="mese")
-        seq.write(seq_filename + '.seq')
-    
-        #write echo times into json
-        import json
-        bids_header = {
-        'EchoTime': (np.arange(1,n_echo+1)*TE*1000).tolist(),
-        'RefocusingFlipAngle': rf_flip[0],
-        'SliceThickness': slice_thickness*1000,
-        'Resolution': (fov_x/Nx*1000, fov_y/Ny*1000),
-        'FourthDimension': 'EchoTime',
-        'ScanningSequence': 'SE',
-        'MRAcquisitionType': '2D',
-        'PulseSequenceType': 'Multi-echo Spin Echo'
-        }
-        with open(seq_filename + '.json', 'w') as f:
-            json.dump(bids_header, f, indent=2)
-        print(bids_header)
+    seq.set_definition(key="FOV", value=[fov_x, fov_y, delta_z+slice_thickness])
+    seq.set_definition(key="Name", value="mese")
+    seq.write(seq_filename + '.seq')
 
-if __name__ == "__main__":
-    main(plot=False, write_seq=True)
+    #write echo times into json
+    import json
+    bids_header = {
+    'EchoTime': (np.arange(1,n_echo+1)*TE*1000).tolist(),
+    'RefocusingFlipAngle': rf_flip[0],
+    'SliceThickness': slice_thickness*1000,
+    'Resolution': (fov_x/Nx*1000, fov_y/Ny*1000),
+    'FourthDimension': 'EchoTime',
+    'ScanningSequence': 'SE',
+    'MRAcquisitionType': '2D',
+    'PulseSequenceType': 'Multi-echo Spin Echo'
+    }
+    with open(seq_filename + '.json', 'w') as f:
+        json.dump(bids_header, f, indent=2)
+
+if __name__ == '__main__':
+    main()
+

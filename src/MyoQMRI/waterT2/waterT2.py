@@ -24,9 +24,9 @@ from __future__ import print_function
 
 import sys
 
-import muscle_bids.utils.image
+import ormir_mids.utils.image
 from .dicomUtils import load3dDicom, save3dDicom
-from ormir_mids.utils.io import load_bids, save_bids
+from ormir_mids.utils.io import load_omids, save_omids
 from ormir_mids.converters import MeSeConverterSiemensMagnitude, T2Converter, FFConverter, B1Converter
 
 import numpy as np
@@ -432,6 +432,8 @@ def plotImages():
     plt.pause(0.001)
 
 def main():
+    global NOISELEVEL, fatT2, baseDir, NTHREADS, DOPLOT, t2Lim, b1Lim, useGPU, ffMapDir, etlLimit, regFF, outSuffix, fitType, sliceRange, refocusingFactor, excProfilePath, refProfilePath, useBIDS, path_is_nifti, parameterCombinations, signals, dicomStack, ROWSTEP, signalsCPU
+    
     parser = ArgumentParser(description='Fit a multiecho dataset')
     parser.add_argument('path', type=str, help='path to the dataset or to bids subject directory')
     parser.add_argument('--bids', '-b', dest='useBIDS',action='store_true', help='use muscle-BIDS format for input/output')
@@ -544,11 +546,15 @@ def main():
                 print('No compatible BIDS datasets found')
                 sys.exit(-1)
             meseFileName = meseFileNames[0] # note: only taking the first dataset
-        med_volume = load_bids(meseFileName)
+        med_volume = load_omids(meseFileName)
         dicomStack = med_volume.volume
         infos = None
         etl = dicomStack.shape[3]
         echoSpacing = med_volume.bids_header['EchoTime'][0]
+
+        nSlices = dicomStack.shape[2]
+
+        if not any(sliceRange): sliceRange = (0, nSlices)
 
         if excProfile is None: # see if slice profiles are stored in BIDS
             try:
@@ -666,7 +672,7 @@ def main():
                 regFF = True
             if regFF:
                 if useBIDS:
-                    ff_aligned = muscle_bids.utils.image.realign_medical_volume(ff_med_volume, med_volume)
+                    ff_aligned = ormir_mids.utils.image.realign_medical_volume(ff_med_volume, med_volume)
                     ff = ff_aligned.volume
                 else:
                     from .registerDatasets import calcTransform2DStack
@@ -733,14 +739,14 @@ def main():
     print("Elapsed time", time.time() - t)
 
     if useBIDS:
-        single_echo_volume = muscle_bids.utils.reduce(med_volume, 0) # get a single echo volume from the original multi echo
-        t2_med_volume = T2Converter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, t2))
-        b1_med_volume = B1Converter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, b1))
-        ff_med_volume = FFConverter.convert_dataset(muscle_bids.utils.replace_volume(single_echo_volume, ff))
+        single_echo_volume = ormir_mids.utils.reduce(med_volume, 0) # get a single echo volume from the original multi echo
+        t2_med_volume = T2Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, t2))
+        b1_med_volume = B1Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, b1))
+        ff_med_volume = FFConverter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, ff))
         patient_base_name = os.path.basename(baseDir)
 
         def save_dataset(dataset, converter):
-            save_bids(os.path.join(baseDir,
+            save_omids(os.path.join(baseDir,
                                    converter.get_directory(),
                                    converter.get_file_name(patient_base_name) + '.nii.gz' ),
                       dataset)

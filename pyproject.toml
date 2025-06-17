@@ -2,9 +2,14 @@
 requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/MyoQMRI/__about__.py"
+
 [project]
 name = "MyoQMRI"
-version = "0.0.1"
+dynamic = [
+  "version"
+]
 authors = [
   {name="Jessica Schäper", email="jessica.schaeper@unibas.ch"},
   {name="Francesco Santini", email="francesco.santini@unibas.ch"},
@@ -21,11 +26,9 @@ license-files = ["LICEN[CS]E*"]
 dependencies = [
   "numpy",
   "scipy",
-  "pypulseq",
+  "sigpy",
+  "pypulseq==1.4.2",
   "nibabel",
-  "json",
-  "pycuda",
-  "skcuda",
   "pydicom",
   "progress",
   "SimpleITK-SimpleElastix",
@@ -35,6 +38,12 @@ dependencies = [
   "pymapvbvd",
 ]
 
+[project.optional-dependencies]
+cuda = [
+  "pycuda",
+  "scikit-cuda",
+]
+
 [project.urls]
 Repository = "https://github.com/bammri/MyoQMRI"
 
@@ -42,4 +51,4 @@ Repository = "https://github.com/bammri/MyoQMRI"
 waterT2 = "MyoQMRI.bin.waterT2:main"
 fatwater = "MyoQMRI.bin.fatwater:main"
 raw2nii_pulseq_mese_leg = "MyoQMRI.bin.raw2nii_pulseq_mese_leg:main"
-write_pulseq_mese_leg = "MyoQRI.bin.write_pulseq_mese_leg"
+write_pulseq_mese_leg = "MyoQMRI.bin.write_pulseq_mese_leg:main"
