@@ -58,6 +58,11 @@ MyoQMRI is on PyPI, you can easily install it via
 ```
 pip install myoqmri
 ```
+if you have cuda, also install the optional dependencies
+
+```
+pip install myoqmri[cuda]
+```
 
 #### Download and install via GitHub
 
