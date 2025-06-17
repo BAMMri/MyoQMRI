@@ -1,3 +1,7 @@
+[![PyPI](https://img.shields.io/pypi/v/myoqmri?color=brightgreen)](https://pypi.org/project/myoqmri/)
+[![Python](https://img.shields.io/pypi/pyversions/myoqmri)](https://pypi.org/project/myoqmri/)
+[![License](https://img.shields.io/pypi/l/myoqmri)](https://pypi.org/project/myoqmri/)
+
 # MyoQMRI
 
 This project is an open-source effort to put together tools for quantitative MRI 
