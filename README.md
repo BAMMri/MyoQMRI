@@ -101,6 +101,7 @@ Data from the `mese_leg.seq` is reconstructed offline.
 The code outputs a `.nii.gz` and an according `.json` file into an `/mr-anat` folder.
 
 <a name="prepare-dicom-data">
+
 ## Prepare DICOM data
 </a>
 
@@ -119,6 +120,7 @@ dcm2omids -r -a PATIENT_NAME /path/to/input/folder /path/to/output/folder
 Note: Output folder must exist.
 
 <a name="additional-step-for-enhanced-dicom">
+
 #### Additional step for enhanced dicom
 </a>
 
