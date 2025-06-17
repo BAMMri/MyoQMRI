@@ -49,7 +49,19 @@ To deactivate the virtual environment, run:
 deactivate
 ```
 
-### Download and install MyoQMRI
+### Installation
+
+#### Install via PyPI
+
+MyoQMRI is on PyPI, you can easily install it via 
+
+```
+pip install myoqmri
+```
+
+#### Download and install via GitHub
+
+Alternatively, you can install MyoQMRI directly from GitHub.
 The git repository contains the compiled pulseq multi echo spin echo sequence, 
 all analysis tools and example data.  
 Download it via
@@ -65,11 +77,18 @@ Install it with
 pip install -e /path/to/folder/MyoQMRI
 ```
 
+If you want to use cuda for GPU support, install the optional dependencies via
+
+```
+pip install -e /path/to/folder/MyoQMRI[cuda]
+```
+
 On Windows:
 
 ```
 pip install -e C:\path\to\folder\MyoQMRI
 ```
+
 
 ## Multi-Echo Spin Echo Sequence
 
