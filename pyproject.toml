@@ -31,9 +31,8 @@ dependencies = [
   "nibabel",
   "pydicom",
   "progress",
-  "SimpleITK-SimpleElastix",
   "matplotlib",
-  "ormir-mids>=0.1.1",
+  "ormir-mids>=0.1.2",
   "twixtools",
   "pymapvbvd",
 ]
@@ -42,6 +41,10 @@ dependencies = [
 cuda = [
   "pycuda",
   "scikit-cuda",
+]
+
+elastix = [
+  "SimpleITK-SimpleElastix",
 ]
 
 [project.urls]

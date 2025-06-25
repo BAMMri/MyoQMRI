@@ -20,13 +20,10 @@
     
 """
 
-from __future__ import print_function
-
 import sys
 
 import ormir_mids.utils.image
-from .dicomUtils import load3dDicom, save3dDicom
-from ormir_mids.utils.io import load_omids, save_omids
+from ormir_mids.utils.io import load_omids, save_omids, save_dicom
 from ormir_mids.converters import MeSeConverterSiemensMagnitude, T2Converter, FFConverter, B1Converter
 
 import numpy as np
@@ -189,6 +186,7 @@ def fitSlc(slc, srcFatT2, t2, b1, ff):
 def getFindBestMatchLocal(pComb, dictionary):
     dictionaryLocal = np.copy(dictionary)
     def findBestMatchLocal(signal):
+        signal = signal.astype(np.float64)
         signal /= signal[0]
         signalMatrix = np.tile(signal**2, [len(pComb),1])
         n = np.sum( (signalMatrix - dictionaryLocal) ** 2, axis = 1 ) #linalg.norm(signalMatrix - signals, axis = 1)
@@ -236,7 +234,7 @@ def fitMultiProcess(slcData):
        findBestMatchLocal = getFindBestMatchLocal(localPars, localSigs)
        
     fitSlcMultiprocess(slcData, False, t2b1ff, findBestMatchLocal)
-    print("Exiting fitMultiProcess")
+    #print("Exiting fitMultiProcess")
     return t2b1ff
 
 ###################################################################
@@ -571,25 +569,40 @@ def main():
             assert excProfile.shape == refProfile.shape and excProfile.ndim == 1, "Slice profiles must be one-dimensional vectors and contain the same number of samples"
 
     else: # load DICOM
-        [dicomStack, infos] = load3dDicom(baseDir)
+        from ormir_mids.converters import MeSeConverterSiemensMagnitude, MeSeConverterGEMagnitude, MeSeConverterPhilipsMagnitude
+        converters = [MeSeConverterSiemensMagnitude, MeSeConverterGEMagnitude, MeSeConverterPhilipsMagnitude]
+        med_volume = ormir_mids.load_dicom(baseDir)
+        converted = False
+        for converter in converters:
+            compatible = False
+            try:
+                compatible = converter.is_dataset_compatible(med_volume)
+            except Exception as e:
+                print(e)
+                pass
+            if compatible:
+                med_volume = converter.convert_dataset(med_volume)
+                converted = True
+                break
 
-        etl = int(infos[0].EchoTrainLength)
-        echoSpacing = float(infos[0].EchoTime)
+        if not converted:
+            print('No compatible DICOM dataset found')
+            sys.exit(-1)
 
-        oldShape = dicomStack.shape
-        newShape = (oldShape[0], oldShape[1], etl, int(oldShape[2]/etl))
+        #[dicomStack, infos] = load3dDicom(baseDir)
 
-        print(newShape)
+        dicomStack = med_volume.volume
 
-        nSlices = newShape[3]
+        etl = dicomStack.shape[3]
+
+        echoSpacing = float(med_volume.omids_header['EchoTime'][0])
+
+        nSlices = dicomStack.shape[2]
 
         if not any(sliceRange): sliceRange = (0, nSlices)
 
         assert sliceRange[0] >= 0 and sliceRange[1] <= nSlices, "Selected slice range is out of bound"
 
-        dicomStack = dicomStack.reshape(newShape).swapaxes(2,3) # reorder as slice, etl instead of etl, slices
-
-        infoOut = infos[:nSlices]
 
     if etlLimit > 0 and etlLimit < etl:
         dicomStack = dicomStack[:, :, :, :etlLimit]
@@ -659,12 +672,15 @@ def main():
             if useBIDS:
                 ffMapFile = FFConverter.find(ffMapDir)
                 if not ffMapFile:
-                    print('Cannot find FF map')
+                    ffMapFile = [ffMapDir]
+                try:
+                    ff_med_volume = load_omids(ffMapFile[0])
+                except FileNotFoundError as e:
+                    print("Cannot find FF map file:", ffMapFile[0])
                     sys.exit(-1)
-                ff_med_volume = load_bids(ffMapFile[0])
-                ff = ff_med_volume.volume
             else:
-                ff, ffInfo = load3dDicom(ffMapDir)
+                ff_med_volume = ormir_mids.load_dicom(ffMapDir)
+            ff = ff_med_volume.volume
             
             # registration of the ff dataset
             if not regFF and ff.shape != dicomStack[:,:,:,0].squeeze().shape:
@@ -738,11 +754,11 @@ def main():
 
     print("Elapsed time", time.time() - t)
 
+    single_echo_volume = ormir_mids.utils.reduce(med_volume, 0) # get a single echo volume from the original multi echo
+    t2_med_volume = T2Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, t2))
+    b1_med_volume = B1Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, b1))
+    ff_med_volume = FFConverter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, ff))
     if useBIDS:
-        single_echo_volume = ormir_mids.utils.reduce(med_volume, 0) # get a single echo volume from the original multi echo
-        t2_med_volume = T2Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, t2))
-        b1_med_volume = B1Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, b1))
-        ff_med_volume = FFConverter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, ff))
         patient_base_name = os.path.basename(baseDir)
 
         def save_dataset(dataset, converter):
@@ -756,10 +772,10 @@ def main():
         save_dataset(ff_med_volume, FFConverter)
 
     else:
-        save3dDicom(t2*10, infoOut, os.path.join(baseDir, 't2' + outSuffix), 97)
-        save3dDicom(b1*100, infoOut, os.path.join(baseDir, 'b1' + outSuffix), 98)
-        save3dDicom(ff*100, infoOut, os.path.join(baseDir, 'ff' + outSuffix), 99)
-        
+        save_dicom(os.path.join(baseDir, 't2' + outSuffix), (t2_med_volume*10).astype(np.uint16))
+        save_dicom(os.path.join(baseDir, 'b1' + outSuffix), (b1_med_volume*100).astype(np.uint16))
+        save_dicom(os.path.join(baseDir, 'ff' + outSuffix), (ff_med_volume*100).astype(np.uint16))
+
 if __name__ == '__main__':
     main()
 
