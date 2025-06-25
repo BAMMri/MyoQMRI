@@ -498,6 +498,14 @@ def main():
 
     refocusingFactor -= 1.0 # the actual parameter passed must be 0.2
 
+    if sys.platform.startswith('win') and not useGPU and NTHREADS != 1:
+        print("Warning: Using multiple threads on Windows is not supported. Setting NTHREADS to 1.")
+        NTHREADS = 1
+
+    if fitType != 0 and NTHREADS is None:
+        print("Warning: Fit type is not EPG, Forcing NTHREADS to 1.")
+        NTHREADS = 1
+
     assert useGPU or ffMapDir == '' or NTHREADS == 1, "FF map can only be used with a single thread"
     assert NTHREADS == 1 or fitType == 0, "Only EPG fitting can be used with multiple threads"
     assert not useGPU or fitType == 0, "Only EPG fitting is supported on the GPU"
