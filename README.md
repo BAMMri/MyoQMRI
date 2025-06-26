@@ -172,8 +172,8 @@ This implementation uses the GPU for the generation of a dictionary of
 signals through [Extended Phase Graph simulation](https://doi.org/10.1002/jmri.24619).
 
 Ideally, you should work with the ormir-mids format. See Section 
-[Prepare DICOM data](prepare-dicom-data) above for instructions. However, as of now, it is also possible 
-to use the code with dicom images.
+[Prepare DICOM data](prepare-dicom-data) above for instructions. However, as of now,
+it is also possible to use the code with dicom images.
 
 In case of dicom data, the dataset must be a directory containing 2D DICOM 
 images from a multiecho spin echo acquisition, ordered as 
@@ -198,12 +198,14 @@ images from a multiecho spin echo acquisition, ordered as
       --bids                use muscle-BIDS format for input/output
       --path-is-nifti       set if path is pointing directly to a nifti file
       -h, --help            show this help message and exit
-      --fit-type T, -y T    type of fitting: T=0: EPG, T=1: Single exponential, T=2: Double exponential (default: 0)
+      --fit-type T, -y T    type of fitting: T=0: EPG, T=1: Single exponential, 
+                            T=2: Double exponential (default: 0)
       --fat-t2 T2, -f T2    fat T2 (default: 151)
       --noise-level N, -n N
                             noise level for thresholding (default: 300)
       --nthreads T, -t T    number of threads to be used for fitting (default: 12)
-      --plot-level L, -p L  do a live plot of the fitting (L=0: no plot, L=1: show the images, L=2: show images and signals)
+      --plot-level L, -p L  do a live plot of the fitting (L=0: no plot, L=1: show 
+                            the images, L=2: show images and signals)
       --t2-limits min max   set the limits for t2 calculation (default: 20-80)
       --b1-limits min max   set the limits for b1 calculation (default: 0.5-1.2)
       --use-gpu, -g         use GPU for fitting
@@ -215,9 +217,13 @@ images from a multiecho spin echo acquisition, ordered as
       --slice-range start end, -l start end
                             Restrict the fitting to a subset of slices
       --refocusing-width factor, -w factor
-                            Slice width of the refocusing pulse with respect to the excitation (default 1.2) (Siemens standard)
+                            Slice width of the refocusing pulse with respect to the 
+                            excitation (default 1.2) (Siemens standard)
       --exc-profile path    Path to the excitation slice profile file
       --ref-profile path    Path to the refocusing slice profile file
+
+Note for Windows users: Currently, the (default) multithreading does not work on Windows.  
+Simply run the code with the option `-t 1` and it should work fine.
 
 #### Example
 

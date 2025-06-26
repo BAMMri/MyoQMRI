@@ -1,4 +1,10 @@
- {
-    "megre": [12,14],
-    "megre_phase": [13,15]
- }
+{
+    "mag": [
+        "02_t1_vibe_dixon_tra_iso_2echo",
+        "04_t1_vibe_dixon_tra_iso_2echo"
+    ],
+    "phase": [
+        "03_t1_vibe_dixon_tra_iso_2echo",
+        "05_t1_vibe_dixon_tra_iso_2echo"
+    ]
+}
