@@ -19,6 +19,8 @@
     187.0
   ],
   "RefocusingFlipAngle": 180.0,
+  "TimeBandwidthProductExcitation": 2.0,
+  "TimeBandwidthProductRefocusing": 2.0,
   "SliceThickness": 7.0,
   "Resolution": [
     1.5625,

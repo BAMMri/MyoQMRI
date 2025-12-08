@@ -37,6 +37,8 @@ def main(seq_filename: str = "mese_leg"):
     slice_gap = 30e-3
     TE = 11e-3  # Echo time and spacing
     TR = 5000e-3  # Repetition time
+    tbw_prod_ex = 2.0
+    tbw_prod_ref = 2.0
     
     sampling_time = 6.4e-3
     readout_time = sampling_time + 2 * system.adc_dead_time
@@ -62,10 +64,11 @@ def main(seq_filename: str = "mese_leg"):
         duration=t_ex,
         slice_thickness=slice_thickness,
         apodization=0.5,
-        time_bw_product=2,
+        time_bw_product=tbw_prod_ex,
         phase_offset=rf_ex_phase,
         return_gz=True,
     )
+
     gs_ex = pp.make_trapezoid(
         channel="z",
         system=system,
@@ -81,7 +84,7 @@ def main(seq_filename: str = "mese_leg"):
         duration=t_ref,
         slice_thickness=slice_thickness,
         apodization=0.5,
-        time_bw_product=2,
+        time_bw_product=tbw_prod_ref,
         phase_offset=rf_ref_phase,
         use="refocusing",
         return_gz=True,
@@ -320,6 +323,8 @@ def main(seq_filename: str = "mese_leg"):
     bids_header = {
     'EchoTime': (np.arange(1,n_echo+1)*TE*1000).tolist(),
     'RefocusingFlipAngle': rf_flip[0],
+    'TimeBandwidthProductExcitation': tbw_prod_ex,
+    'TimeBandwidthProductRefocusing': tbw_prod_ref,
     'SliceThickness': slice_thickness*1000,
     'Resolution': (fov_x/Nx*1000, fov_y/Ny*1000),
     'FourthDimension': 'EchoTime',
