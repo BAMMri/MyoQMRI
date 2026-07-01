@@ -1,8 +1,9 @@
 """
-    This code computes fat and water images from 2 echo GRE data, using code
+    This script computes fat and water images from 2-echo GRE data, using code
     which was developed by Jonathan Stelter et al.
     For details see:
     https://github.com/BMRRgroup/2echo-WaterFat-hmrGC for instructions
+    
     Optional input arguments:
     -p --path       path to folder which contains data (default: current directory)
     -e --echonums   if data contains more than two echoes, provide which echoes
@@ -16,17 +17,91 @@
 
 import os
 import re
-import pathlib
+from pathlib import Path
+from collections import defaultdict
 import numpy as np
 from argparse import ArgumentParser
 import nibabel as nib
 import json
+import copy
 
 try:
     from hmrGC_dualEcho.dual_echo import DualEcho
 except ImportError:
     raise RuntimeError('hmrGC_dualEcho is not available. Visit https://github.com/BMRRgroup/2echo-WaterFat-hmrGC for instructions')
 
+##################### Functions for reading data ###############################
+def find_megre_files(folder: str | Path) -> dict:
+    """
+    Scan a folder for MEGRE files and group them by dataset prefix.
+
+    Returns a dict keyed by prefix (e.g. "xxx", "yyy"), each containing
+    'magnitude' and 'phase' sub-dicts with 'json' and 'nii' paths.
+    """
+    folder = Path(folder)
+
+    # prefix -> {"magnitude": {"json":..., "nii":...}, "phase": {...}}
+    datasets = defaultdict(lambda: {
+        "magnitude": {"json": None, "nii": None},
+        "phase":     {"json": None, "nii": None},
+    })
+
+    phase_pattern = re.compile(r"^(.*?)_part-phase_MEGRE(\..+)$")
+    mag_pattern   = re.compile(r"^(.*?)(?:_part-mag)?_MEGRE(\..+)$")
+
+    for file in folder.iterdir():
+        name = file.name
+
+        if name.endswith(".json"):
+            ext_key = "json"
+        elif name.endswith(".nii.gz") or name.endswith(".nii"):
+            ext_key = "nii"
+        else:
+            continue
+
+        m_phase = phase_pattern.match(name)
+        if m_phase:
+            prefix = m_phase.group(1)
+            datasets[prefix]["phase"][ext_key] = file
+            continue
+
+        m_mag = mag_pattern.match(name)
+        if m_mag:
+            prefix = m_mag.group(1)
+            datasets[prefix]["magnitude"][ext_key] = file
+
+    return dict(datasets)
+
+
+def load_megre_data(folder: str | Path) -> dict:
+    """
+    Load MEGRE JSON metadata + nii paths for every dataset found in the folder,
+    keyed by dataset prefix.
+    """
+    all_files = find_megre_files(folder)
+    all_data = {}
+
+    for prefix, files in all_files.items():
+        data = {}
+        for kind in ("magnitude", "phase"):
+            json_path = files[kind]["json"]
+            nii_path  = files[kind]["nii"]
+
+            data[kind] = {
+                "metadata": json.loads(json_path.read_text()) if json_path else None,
+                "nii_path": nii_path,
+            }
+
+            status = []
+            status.append(f"JSON={json_path.name}" if json_path else "JSON=missing")
+            status.append(f"NII={nii_path.name}" if nii_path else "NII=missing")
+            print(f"[{prefix} | {kind:>9}] {' | '.join(status)}")
+
+        all_data[prefix] = data
+
+    return all_data
+
+################################################################################
 
 def main():
     #### READ ARGUMENTS ###
@@ -43,51 +118,35 @@ def main():
     eno2 = args.echonums[1]
     fatshift = args.fatshift
     relamps = args.relamps
+    ph = args.ph
 
     if len(fatshift) != len(relamps):
         raise ValueError('Number of fat peaks and relative amplitudes must match')
 
-    # get file names
-    all_files = os.listdir(path)
-    magnnames = [x for x in all_files if x.endswith('megre.nii.gz')]
-    phasenames = [x for x in all_files if x.endswith('megre_ph.nii.gz')]
-    jsonfilename = [x for x in all_files if x.endswith('megre.json')]
-    if magnnames == []:
-        raise ValueError('No magnitude data found')
-    if phasenames == []:
-        raise ValueError('No phase data found')
-    if jsonfilename == []:
-        raise ValueError('No json file found')
-
-    magnnames.sort()
-    phasenames.sort()
-    jsonfilename.sort()
+    #load data
+    data = load_megre_data(path)
 
     ### PREPARE DATA, EXECUTE FAT WATER COMPUTATION, SAVE AS NIFTI ###
-    for i in range(0, len(magnnames)):
+    keys = list(data)
+    for i in range(0, len(keys)):
     # load data as list, convert to np array
-        magndata = nib.load(os.path.join(path, magnnames[i]))
-        print(magnnames[i] + ' loaded')
+        magndata = nib.load(data[keys[i]]["magnitude"]["nii_path"])
+        print(str(data[keys[i]]["magnitude"]["nii_path"]) + ' loaded')
         affinematrix = magndata.affine
         pixeldim = magndata.header['pixdim']
         pixeldim = pixeldim[1:4]
         magndata = magndata.get_fdata()
-        phasedata = nib.load(os.path.join(path,phasenames[i]))
-        print(phasenames[i] + ' loaded')
+        phasedata = nib.load(data[keys[i]]["phase"]["nii_path"])
+        print(str(data[keys[i]]["phase"]["nii_path"]) + ' loaded')
         phasedata = phasedata.get_fdata()
         phasedata = (phasedata - 2048)/4096 * 2 * np.pi
-    
     # combine data to complex array
         data_complex = magndata * np.exp(1j*phasedata)
     
-    # load json file and get relevant parameters
-        with open(os.path.join(path, jsonfilename[i])) as json_file:
-            jsonfile = json.load(json_file)
-            json_file.close()
-    
-        field_strength = jsonfile['MagneticFieldStrength']
-        center_freq = jsonfile['ImagingFrequency']*(10**6)
-        TEs = jsonfile['EchoTime'] 
+    # access relevant meta data
+        field_strength = data[keys[i]]["magnitude"]['metadata']['MagneticFieldStrength']
+        center_freq = data[keys[i]]["magnitude"]['metadata']['ImagingFrequency']*(10**6)
+        TEs = data[keys[i]]["magnitude"]['metadata']['EchoTime'] 
     
     # calculate mask from magnitude
         msk = abs(magndata[:,:,:,1])
@@ -128,39 +187,42 @@ def main():
         fatphase = np.angle(g.images['fat'])
     
     # export as nifti
-        try:
-            patname = re.search('(.+?)_megre', magnnames[i]).group(1)
-        except AttributeError:
-            patname = '' 
+        patname = keys[i]
     
-        new_dir = pathlib.Path(path, 'mr-quant')
+        new_dir = Path(path, 'mr-quant')
         new_dir.mkdir(parents=True, exist_ok=True)
-        filename_water = patname + '_W.nii.gz'
-        filename_fat = patname + '_F.nii.gz'
+        if ph == True:
+            filename_water = patname + '_part-mag_WATER'
+            filename_fat = patname + '_part-mag_FAT'
+            filename_water_phase = patname + '_part-phase_WATER'
+            filename_fat_phase = patname + '_part-phase_FAT'
+            nii_image = nib.Nifti1Image(waterphase, affine=affinematrix)
+            nib.save(nii_image, os.path.join(path, new_dir.name, filename_water_phase + '.nii.gz'))
+            nii_image = nib.Nifti1Image(fatphase, affine=affinematrix)
+            nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat_phase + '.nii.gz'))
+        else:
+            filename_water = patname + '_WATER'
+            filename_fat = patname + '_FAT'
     
         nii_image = nib.Nifti1Image(watermagn, affine=affinematrix)
-        nib.save(nii_image, os.path.join(path, new_dir.name, filename_water))
+        nib.save(nii_image, os.path.join(path, new_dir.name, filename_water + '.nii.gz'))
         nii_image = nib.Nifti1Image(fatmagn, affine=affinematrix)
-        nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat))
-        if args.ph == True:
-            filename_water_phase = patname + '_W_phase.nii.gz'
-            filename_fat_phase = patname + '_F_phase.nii.gz'
-            nii_image = nib.Nifti1Image(waterphase, affine=affinematrix)
-            nib.save(nii_image, os.path.join(path, new_dir.name, filename_water_phase))
-            nii_image = nib.Nifti1Image(fatphase, affine=affinematrix)
-            nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat_phase))
-
+        nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat + '.nii.gz'))
+    
         # write json file for this data
-        additional_entries_water = {'PulseSequenceType': 'Water Map'}
-        additional_entries_fat = {'PulseSequenceType': 'Fat Map'}
-        jsonfile.update(additional_entries_water)
-        jsonfile_water = jsonfile
-        jsonfile.update(additional_entries_fat)
-        jsonfile_fat = jsonfile
-        with open(os.path.join(path, new_dir.name, patname + '_W.json'), 'w') as f:
-                json.dump(jsonfile_water, f, indent=2)
-        with open(os.path.join(path, new_dir.name, patname + '_F.json'), 'w') as f:
-                json.dump(jsonfile_fat, f, indent=2)
-           
+        metadata_water = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
+        metadata_fat = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
+        metadata_water['PulseSequenceType'] = 'Water Map'
+        metadata_fat['PulseSequenceType'] = 'Fat Map'
+        with open(os.path.join(path, new_dir.name, filename_water + '.json'), 'w') as f:
+                json.dump(metadata_water, f, indent=2)
+        with open(os.path.join(path, new_dir.name, filename_fat + '.json'), 'w') as f:
+                json.dump(metadata_fat, f, indent=2)
+        if ph == True:
+            with open(os.path.join(path, new_dir.name, filename_water_phase + '.json'), 'w') as f:
+                    json.dump(metadata_water, f, indent=2)
+            with open(os.path.join(path, new_dir.name, filename_fat_phase + '.json'), 'w') as f:
+                    json.dump(metadata_fat, f, indent=2)
+
 if __name__ == '__main__':
     main()

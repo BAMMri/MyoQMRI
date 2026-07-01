@@ -192,7 +192,7 @@ def main():
         new_dir = pathlib.Path(path, 'mr-anat')
         new_dir.mkdir(parents=True, exist_ok=True)
     
-        new_filename = re.search('(.+?)[.]dat', filename).group(1) + '_mese'
+        new_filename = 'sub-' + re.search('(.+?)[.]dat', filename).group(1) + '_MESE'
         nii_image = nib.Nifti1Image(rec_reordered, affine=np.eye(4)*[res[0], res[1], slice_thickness, 1])
         nib.save(nii_image, os.path.join(path, new_dir.name, new_filename + '.nii.gz'))
     
