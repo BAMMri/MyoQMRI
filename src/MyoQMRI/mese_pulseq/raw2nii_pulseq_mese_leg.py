@@ -189,12 +189,17 @@ def main():
         dims = np.shape(rec)
         dims_re = np.shape(rec_reordered)
         
-        new_dir = pathlib.Path(path, 'mr-anat')
-        new_dir.mkdir(parents=True, exist_ok=True)
+        pat_name = 'sub-' + re.search('(.+?)[.]dat', filename).group(1)
+        new_dir = os.path.join(path, pat_name, 'mr-anat')
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+            print("Folder %s created!" % new_dir)
+        else:
+            print("Folder %s already exists" % new_dir)
     
-        new_filename = 'sub-' + re.search('(.+?)[.]dat', filename).group(1) + '_MESE'
+        new_filename =  pat_name + '_MESE'
         nii_image = nib.Nifti1Image(rec_reordered, affine=np.eye(4)*[res[0], res[1], slice_thickness, 1])
-        nib.save(nii_image, os.path.join(path, new_dir.name, new_filename + '.nii.gz'))
+        nib.save(nii_image, os.path.join(new_dir, new_filename + '.nii.gz'))
     
         # write json file for this data
         additional_entries = {'PatientPosition': pos_pat,
@@ -202,7 +207,7 @@ def main():
                              'ImagingFrequency': freq}
         jsonfile.update(additional_entries)
     
-        with open(os.path.join(path, new_dir.name, new_filename + '.json'), 'w') as f:
+        with open(os.path.join(new_dir, new_filename + '.json'), 'w') as f:
                 json.dump(jsonfile, f, indent=2)
             
             
