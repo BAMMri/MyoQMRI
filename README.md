@@ -68,7 +68,7 @@ if you have cuda, also install the optional dependencies
 pip install myoqmri[cuda]
 ```
 
-#### Download and install via GitHub
+#### Download and install via GitHub (recommended)
 
 Alternatively, you can install MyoQMRI directly from GitHub.
 The git repository contains the compiled pulseq multi echo spin echo sequence, 
@@ -124,7 +124,7 @@ Data from the `mese_leg.seq` is reconstructed offline.
 * Transfer the raw data from the scanner
 * rename the `.dat` file to the patient token of your choice
 * Copy `mese_leg.json` and `mese_leg.seq` into the same folder
-* Run `raw2nii_pulseq_mese_leg -p path/to/folder/containing/the/data`
+* Run `raw2nii_pulseq_mese_leg /path/to/input/folder /path/to/output/folder`
 
 The code outputs a `.nii.gz` and an according `.json` file into an `/mr-anat` folder.
 
@@ -142,7 +142,7 @@ see additional [step below](#additional-step-for-enhanced-dicom).
 The conversion is done with:
 
 ```
-dcm2omids -r -a PATIENT_NAME /path/to/input/folder /path/to/output/folder 
+dcm2omids -r -a PATIENT_ID /path/to/input/folder /path/to/output/folder 
 ```
 
 Note: Output folder must exist.
