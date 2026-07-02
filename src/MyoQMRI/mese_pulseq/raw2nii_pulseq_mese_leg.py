@@ -126,19 +126,22 @@ def recon_cartesian_2d(kdata, seq, shape=None, use_labels=None):
 def main():
     ### READ DATA ###
     parser = ArgumentParser(description='Reconstruct raw data from pulseq mese')
-    parser.add_argument('-p', '--path', type=str, default= os.getcwd(), help='path to the dataset, default: current working directory')
-    parser.add_argument('-a', '--anonymize', const='anon', metavar='pseudo_name', dest='anonymize', type=str, nargs = '?', help='Use the pseudo_name (default: anon) as patient name')
+    parser.add_argument('sub_number', type=str, nargs = '?', help='Subject number for identification')
+    parser.add_argument('path_in', type=str, default= os.getcwd(), help='Path to the dataset, default: current working directory')
+    parser.add_argument('path_out', type=str, default= os.getcwd(), help='Path where the result gets saved, default: current working directory')
+    
     args = parser.parse_args()
 
-    path = args.path
-    ANON_NAME = args.anonymize # not yet used, have to figure out how to best do this with multiple .dat files
+    pat_name = 'sub-' + args.sub_number # TODO: doesn't work if multiple .dat files are in folder
+    path_in = args.path_in
+    path_out = args.path_out
     
     # get file names for Pulseq data
-    all_files=os.listdir(path)
+    all_files=os.listdir(path_in)
     
     seq_filename = [x for x in all_files if x.endswith('.seq')]
     if seq_filename == []:
-        raise ValueError('No .seq file uploaded')
+        raise ValueError('No .seq file found. Folder must contain .seq file.')
     seq_filename = seq_filename[0]
     
     filenames = [x for x in all_files if x.endswith('.dat')]
@@ -158,19 +161,19 @@ def main():
         filename = filenames[i]
         # Load data from twix file (shape = [N_coils, N_meas, N_adc])
         np.seterr(divide='ignore', invalid='ignore')
-        kdata = read_raw_data(os.path.join(path, filename))
+        kdata = read_raw_data(os.path.join(path_in, filename))
     
         # Load associated sequence file
         seq = Sequence()
-        seq.read(os.path.join(path, seq_filename), detect_rf_use=True)
+        seq.read(os.path.join(path_in, seq_filename), detect_rf_use=True)
     
         # Load json file
-        with open(os.path.join(path, json_filename)) as json_file:
+        with open(os.path.join(path_in, json_filename)) as json_file:
             jsonfile = json.load(json_file)
             json_file.close()
     
         # get header
-        twix = tx.read_twix(os.path.join(path, filename))
+        twix = tx.read_twix(os.path.join(path_in, filename))
         hdr = twix[-1]['hdr']
     
         # get header and json info
@@ -189,8 +192,7 @@ def main():
         dims = np.shape(rec)
         dims_re = np.shape(rec_reordered)
         
-        pat_name = 'sub-' + re.search('(.+?)[.]dat', filename).group(1)
-        new_dir = os.path.join(path, pat_name, 'mr-anat')
+        new_dir = os.path.join(path_out, pat_name, 'mr-anat')
         if not os.path.exists(new_dir):
             os.makedirs(new_dir)
             print("Folder %s created!" % new_dir)
