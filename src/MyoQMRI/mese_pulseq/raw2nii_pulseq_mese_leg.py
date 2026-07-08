@@ -4,8 +4,6 @@
     Data is reconstructed as [x,y,z,echoes] and saved as nifti.
     The seq file came together with a json file. Both must be in the same folder
     as the acquired data to run the reconstruction.
-    Optional input parameters:
-    -p --path       path to the dataset (default: current working directory)
 """
 
 import os

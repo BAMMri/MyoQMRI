@@ -106,14 +106,16 @@ def load_megre_data(folder: str | Path) -> dict:
 def main():
     #### READ ARGUMENTS ###
     parser = ArgumentParser(description='Compute fat/water images from dual echo data')
-    parser.add_argument('-p', '--path', type=str, default= os.getcwd(), help='path to the folder where the data is located, default: current working directory')
+    parser.add_argument('path_in', type=str, default= os.getcwd(), help='Path to the dataset, default: current working directory')
+    parser.add_argument('path_out', type=str, default= os.getcwd(), help='Path where the result gets saved, default: current working directory')
     parser.add_argument('-e', '--echonums', nargs=2, type=int, default=[1,2], help='if data contains more than two echoes, provide which echoes to use, default: first two echoes')
     parser.add_argument('-c', '--fatshift', nargs='+', type=float, default=[3.5], help='Chemical shift of fat peak(s) in ppm, default: 3.5')
     parser.add_argument('-a', '--relamps', nargs='+', type=float, default=[1], help='Relative amplitude of fat peaks, default: 1')
     parser.add_argument('-ph', action='store_true', help='if given, the code additionally outputs the phase of the computed fat and water images')
     args = parser.parse_args()
 
-    path = args.path
+    path_in = args.path_in
+    path_out = args.path_out
     eno1 = args.echonums[0]
     eno2 = args.echonums[1]
     fatshift = args.fatshift
@@ -124,7 +126,7 @@ def main():
         raise ValueError('Number of fat peaks and relative amplitudes must match')
 
     #load data
-    data = load_megre_data(path)
+    data = load_megre_data(path_in)
 
     ### PREPARE DATA, EXECUTE FAT WATER COMPUTATION, SAVE AS NIFTI ###
     keys = list(data)
@@ -187,41 +189,46 @@ def main():
         fatphase = np.angle(g.images['fat'])
     
     # export as nifti
-        patname = keys[i]
+        pat_name = keys[i]
     
-        new_dir = Path(path, 'mr-quant')
-        new_dir.mkdir(parents=True, exist_ok=True)
-        if ph == True:
-            filename_water = patname + '_part-mag_WATER'
-            filename_fat = patname + '_part-mag_FAT'
-            filename_water_phase = patname + '_part-phase_WATER'
-            filename_fat_phase = patname + '_part-phase_FAT'
-            nii_image = nib.Nifti1Image(waterphase, affine=affinematrix)
-            nib.save(nii_image, os.path.join(path, new_dir.name, filename_water_phase + '.nii.gz'))
-            nii_image = nib.Nifti1Image(fatphase, affine=affinematrix)
-            nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat_phase + '.nii.gz'))
+        new_dir = os.path.join(path_out, 'mr-quant')
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+            print("Folder %s created!" % new_dir)
         else:
-            filename_water = patname + '_WATER'
-            filename_fat = patname + '_FAT'
+            print("Folder %s already exists" % new_dir)
+
+        if ph == True:
+            filename_water = pat_name + '_part-mag_WATER'
+            filename_fat = pat_name + '_part-mag_FAT'
+            filename_water_phase = pat_name + '_part-phase_WATER'
+            filename_fat_phase = pat_name + '_part-phase_FAT'
+            nii_image = nib.Nifti1Image(waterphase, affine=affinematrix)
+            nib.save(nii_image, os.path.join(new_dir, filename_water_phase + '.nii.gz'))
+            nii_image = nib.Nifti1Image(fatphase, affine=affinematrix)
+            nib.save(nii_image, os.path.join(new_dir, filename_fat_phase + '.nii.gz'))
+        else:
+            filename_water = pat_name + '_WATER'
+            filename_fat = pat_name + '_FAT'
     
         nii_image = nib.Nifti1Image(watermagn, affine=affinematrix)
-        nib.save(nii_image, os.path.join(path, new_dir.name, filename_water + '.nii.gz'))
+        nib.save(nii_image, os.path.join(new_dir, filename_water + '.nii.gz'))
         nii_image = nib.Nifti1Image(fatmagn, affine=affinematrix)
-        nib.save(nii_image, os.path.join(path, new_dir.name, filename_fat + '.nii.gz'))
+        nib.save(nii_image, os.path.join(new_dir, filename_fat + '.nii.gz'))
     
         # write json file for this data
         metadata_water = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
         metadata_fat = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
         metadata_water['PulseSequenceType'] = 'Water Map'
         metadata_fat['PulseSequenceType'] = 'Fat Map'
-        with open(os.path.join(path, new_dir.name, filename_water + '.json'), 'w') as f:
+        with open(os.path.join(new_dir, filename_water + '.json'), 'w') as f:
                 json.dump(metadata_water, f, indent=2)
-        with open(os.path.join(path, new_dir.name, filename_fat + '.json'), 'w') as f:
+        with open(os.path.join(new_dir, filename_fat + '.json'), 'w') as f:
                 json.dump(metadata_fat, f, indent=2)
         if ph == True:
-            with open(os.path.join(path, new_dir.name, filename_water_phase + '.json'), 'w') as f:
+            with open(os.path.join(new_dir, filename_water_phase + '.json'), 'w') as f:
                     json.dump(metadata_water, f, indent=2)
-            with open(os.path.join(path, new_dir.name, filename_fat_phase + '.json'), 'w') as f:
+            with open(os.path.join(new_dir, filename_fat_phase + '.json'), 'w') as f:
                     json.dump(metadata_fat, f, indent=2)
 
 if __name__ == '__main__':
