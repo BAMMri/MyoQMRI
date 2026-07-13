@@ -51,11 +51,12 @@ def getCudaFunction(nEchoes, echoSpacing, T1f, T1w, magPrep = False):
     mod = SourceModule(source, no_extern_c=True)
     return mod.get_function("cpmg_sliceprof_B1_FF")
 
+TBW = 2.0
+
 class FatFractionLookup_GPU(FatFractionLookup):
     
     T1w = 1400
     T1f = 365
-    TBW = 2.0
 #    NT2s = 200 # number of calculated T2 points
 #    NB1s = 50 # number of calculated B1 points
     NT2s = 60 # number of calculated T2 points
@@ -65,8 +66,8 @@ class FatFractionLookup_GPU(FatFractionLookup):
     
     CudaBlockSize=256 # number of threads
     
-    def __init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor = 0.2):
-        FatFractionLookup.__init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor)
+    def __init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor = 0.2, excTBW = TBW, refTBW = TBW):
+        FatFractionLookup.__init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor, excTBW, refTBW)
         self.allSignals = None
         self.parameterCombinations = None
     

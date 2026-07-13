@@ -84,13 +84,12 @@ def reduceSliceProf(sliceprof, bins, lastVal = None):
     
     return sliceprof_out.squeeze(), lastVal
         
-
+TBW = 2.0
 
 class FatFractionLookup:
     
     T1w = 1400
     T1f = 365
-    TBW = 2.0
 #    NT2s = 200 # number of calculated T2 points
 #    NB1s = 50 # number of calculated B1 points
     NT2s = 60 # number of calculated T2 points
@@ -98,7 +97,7 @@ class FatFractionLookup:
     MagPreparePulse = False
     NFF = 101
     
-    def __init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor = 0.2):
+    def __init__(self, T2Limits, B1Limits, FatT2, NEchoes, EchoSpacing, refWidthFactor = 0.2, excTBW: float = TBW, refTBW: float = TBW):
         self.fatT2 = FatT2
         self.NEchoes = NEchoes
         self.EchoSpacing = EchoSpacing
@@ -106,7 +105,7 @@ class FatFractionLookup:
         self.B1Limits = B1Limits
 
         self.rfParameters = None
-        self.setPulses(refWidthFactor=refWidthFactor) # use default values for setpulses
+        self.setPulses(refWidthFactor=refWidthFactor, excBW=excTBW, refBW=refTBW) # use default values for setpulses
         
         self.T2Points = np.linspace(T2Limits[0], T2Limits[1], self.NT2s)
         self.B1Points = np.linspace(B1Limits[0], B1Limits[1], self.NB1s)

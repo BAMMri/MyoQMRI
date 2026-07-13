@@ -24,7 +24,8 @@ import sys
 
 import ormir_mids.utils.image
 from ormir_mids.utils.io import load_omids, save_omids, save_dicom
-from ormir_mids.converters import MeSeConverterSiemensMagnitude, T2Converter, FFConverter, B1Converter
+from ormir_mids.converters import MeSeConverterSiemensMagnitude, MeSeConverterGEMagnitude, MeSeConverterPhilipsMagnitude
+from ormir_mids.converters import T2Converter, FFConverter, B1Converter
 
 import numpy as np
 import numpy.linalg as linalg
@@ -47,7 +48,7 @@ t2Lim = (20,80)
 #t2Lim = (50,600)
 b1Lim = (0.5,1.2)
 refocusingFactor = 1.2
-
+TBW = 2.0
 
 ###########################################################
 ## Standard fitting
@@ -434,7 +435,7 @@ def main():
     
     parser = ArgumentParser(description='Fit a multiecho dataset')
     parser.add_argument('path', type=str, help='path to the dataset or to bids subject directory')
-    parser.add_argument('--bids', '-b', dest='useBIDS',action='store_true', help='use muscle-BIDS format for input/output')
+    parser.add_argument('--mids', '--bids', '-b', dest='useBIDS',action='store_true', help='use ORMIR-MIDS format for input/output')
     parser.add_argument('--path-is-nifti', dest='path_is_nifti', action='store_true', help='set if path is pointing directly to a nifti file')
     parser.add_argument('--fit-type', '-y', metavar='T', dest='fitType', type=int, help='type of fitting: T=0: EPG, T=1: Single exponential, T=2: Double exponential (default: 0)', default=0)
     parser.add_argument('--fat-t2', '-f', metavar='T2', dest='fatT2', type=float, help=f'fat T2 (default: {fatT2:.0f})', default = fatT2)
@@ -452,6 +453,8 @@ def main():
     parser.add_argument('--refocusing-width', '-w', metavar='factor', dest='refocusingFactor', type=float, help=f'Slice width of the refocusing pulse with respect to the excitation (default {refocusingFactor}) (Siemens standard)', default=refocusingFactor)
     parser.add_argument('--exc-profile', metavar='path', dest='excProfilePath', type=str, help='Path to the excitation slice profile file', default=None)
     parser.add_argument('--ref-profile', metavar='path', dest='refProfilePath', type=str, help='Path to the refocusing slice profile file', default=None)
+    parser.add_argument('--exc-tbw', metavar='TBW', dest='excTBW', type=float, help=f'Time-bandwidth product of the excitation pulse (default {TBW})', default=TBW)
+    parser.add_argument('--ref-tbw', metavar='TBW', dest='refTBW', type=float, help=f'Time-bandwidth product of the refocusing pulse (default {TBW})', default=TBW)
 
 
 
@@ -477,6 +480,8 @@ def main():
     refProfilePath = args.refProfilePath
     useBIDS = args.useBIDS
     path_is_nifti = args.path_is_nifti
+    excTBW = args.excTBW
+    refTBW = args.refTBW
 
     print("Base dir:", baseDir)
     print("NOISELEVEL:", NOISELEVEL)
@@ -495,6 +500,8 @@ def main():
     print("Refocusing Factor", refocusingFactor)
     print("Excitation slice profile", excProfilePath)
     print("Refocusing slice profile", refProfilePath)
+    print("Excitation TBW", excTBW)
+    print("Refocusing TBW", refTBW)
 
     refocusingFactor -= 1.0 # the actual parameter passed must be 0.2
 
@@ -541,10 +548,12 @@ def main():
     else:
         from .FatFractionLookup import FatFractionLookup
 
+    patient_base_name = os.path.basename(baseDir)
 
     if useBIDS:
         if path_is_nifti:
             meseFileName=baseDir
+            patient_base_name = '_'.join(patient_base_name.split('_')[:-1]).replace('sub-','') # get the whole name minus the suffix
             baseDir = os.path.dirname(meseFileName)
         else:
             meseFileNames = MeSeConverterSiemensMagnitude.find(baseDir)
@@ -552,6 +561,8 @@ def main():
                 print('No compatible BIDS datasets found')
                 sys.exit(-1)
             meseFileName = meseFileNames[0] # note: only taking the first dataset
+            patient_base_name = os.path.basename(meseFileName)
+            patient_base_name = '_'.join(patient_base_name.split('_')[:-1]).replace('sub-','')  # get the whole name minus the suffix
         med_volume = load_omids(meseFileName)
         dicomStack = med_volume.volume
         infos = None
@@ -577,7 +588,6 @@ def main():
             assert excProfile.shape == refProfile.shape and excProfile.ndim == 1, "Slice profiles must be one-dimensional vectors and contain the same number of samples"
 
     else: # load DICOM
-        from ormir_mids.converters import MeSeConverterSiemensMagnitude, MeSeConverterGEMagnitude, MeSeConverterPhilipsMagnitude
         converters = [MeSeConverterSiemensMagnitude, MeSeConverterGEMagnitude, MeSeConverterPhilipsMagnitude]
         med_volume = ormir_mids.load_dicom(baseDir)
         converted = False
@@ -626,10 +636,10 @@ def main():
     ffl = None
 
     if fatT2 <= 0:
-        ffl = FatFractionLookup(t2Lim, b1Lim, INITIAL_FATT2, etl, echoSpacing, refocusingFactor)
+        ffl = FatFractionLookup(t2Lim, b1Lim, INITIAL_FATT2, etl, echoSpacing, refocusingFactor, excTBW, refTBW)
         if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
     else:
-        ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor)
+        ffl = FatFractionLookup(t2Lim, b1Lim, fatT2, etl, echoSpacing, refocusingFactor, excTBW, refTBW)
         if excProfile is not None: ffl.setPulsesExt(excProfile, refProfile, refocusingFactor)
         
     if fitType == 0:
@@ -767,8 +777,6 @@ def main():
     b1_med_volume = B1Converter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, b1))
     ff_med_volume = FFConverter.convert_dataset(ormir_mids.utils.replace_volume(single_echo_volume, ff))
     if useBIDS:
-        patient_base_name = os.path.basename(baseDir)
-
         def save_dataset(dataset, converter):
             save_omids(os.path.join(baseDir,
                                    converter.get_directory(),
