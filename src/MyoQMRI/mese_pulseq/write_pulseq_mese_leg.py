@@ -285,20 +285,20 @@ def main(seq_filename: str = "mese_leg"):
                 seq.add_block(gs4, rf_ref)
                 seq.add_block(gs5, gr5, gp_pre)
                 seq.add_block(gr6, adc)
-                seq.add_block(gs7, gr7, gp_rew)
                 if j != n_echo-1:
                     label = pp.make_label(type="INC", label="ECO", value=1)
                 else:
                     label = pp.make_label(type="SET", label="ECO", value=0)
+                seq.add_block(gs7, gr7, gp_rew, label)
             # end
-            seq.add_block(gs4, label)
+            seq.add_block(gs4)
             seq.add_block(gs5)
-            seq.add_block(delay_TR)
             if s != n_slices-1:
-                seq.add_block(pp.make_label(type="INC", label="SET", value=1))
+                labels = [pp.make_label(type="INC", label="SET", value=1)]
             else:
-                seq.add_block(pp.make_label(type="SET", label="SET", value=0),
-                              pp.make_label(type="INC", label="LIN", value=1))
+                labels = [pp.make_label(type="SET", label="SET", value=0),
+                              pp.make_label(type="INC", label="LIN", value=1)]
+            seq.add_block(delay_TR, *labels)
         # end
     # end
     (
