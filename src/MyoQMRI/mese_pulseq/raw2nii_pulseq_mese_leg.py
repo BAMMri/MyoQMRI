@@ -124,7 +124,7 @@ def recon_cartesian_2d(kdata, seq, shape=None, use_labels=None):
 def main():
     ### READ DATA ###
     parser = ArgumentParser(description='Reconstruct raw data from pulseq mese')
-    parser.add_argument('sub_number', type=str, nargs = '?', help='Subject number for identification')
+    parser.add_argument('sub_number', type=str, default='01', nargs = '?', help='Subject number for identification')
     parser.add_argument('path_in', type=str, default= os.getcwd(), help='Path to the dataset, default: current working directory')
     parser.add_argument('path_out', type=str, default= os.getcwd(), help='Path where the result gets saved, default: current working directory')
     
