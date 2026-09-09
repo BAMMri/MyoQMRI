@@ -8,7 +8,7 @@ This project is an open-source effort to put together tools for quantitative MRI
 of the muscles. 
 Current features include:
 
-* multi echo spin echo sequence, written in PyPulseq (v1.5.0)
+* multi echo spin echo sequence, written in PyPulseq (v1.4.2)
 * fast water T2 mapping from multi echo spin echo images
 * fat water separation from 2 echo gradient echo data
 
@@ -288,14 +288,12 @@ pip install -e /path/to/folder/2echo-WaterFat-hmrGC
 
 ### Usage
 
-    usage: fatwater [-h] [-p PATH] [-e ECHONUMS ECHONUMS] [-c FATSHIFT [FATSHIFT ...]] [-a RELAMPS [RELAMPS ...]] [-ph]
+    usage: fatwater path_in path_out [-h] [-e ECHONUMS ECHONUMS] [-c FATSHIFT [FATSHIFT ...]] [-a RELAMPS [RELAMPS ...]] [-ph]
 
     Compute fat/water images from dual echo data
 
     options:
       -h, --help            show this help message and exit
-      -p PATH, --path PATH  path to the folder where the data is located, 
-                            default: current working directory
       -e ECHONUMS ECHONUMS, --echonums ECHONUMS ECHONUMS
                             if data contains more than two echoes, provide which
                             echoes to use, default: first two echoes
