@@ -27,7 +27,7 @@ dependencies = [
   "numpy",
   "scipy",
   "sigpy",
-  "pypulseq==1.5.0",
+  "pypulseq==1.4.2",
   "nibabel",
   "pydicom",
   "progress",
