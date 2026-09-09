@@ -6,7 +6,7 @@
     
     Input arguments:
     path_in       path to folder which contains data
-    path_out      path to folder in which the output gets written
+    path_out      path to folder into which the output gets written
     
     Optional input arguments:
     -e --echonums   if data contains more than two echoes, provide which echoes
