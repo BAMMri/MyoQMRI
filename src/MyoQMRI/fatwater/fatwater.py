@@ -4,8 +4,11 @@
     For details see:
     https://github.com/BMRRgroup/2echo-WaterFat-hmrGC for instructions
     
+    Input arguments:
+    path_in       path to folder which contains data
+    path_out      path to folder in which the output gets written
+    
     Optional input arguments:
-    -p --path       path to folder which contains data (default: current directory)
     -e --echonums   if data contains more than two echoes, provide which echoes
                     to use (default: first two echoes)
     -c --fatshift   Chemical shift of fat peak(s) in ppm (default: 3.5)

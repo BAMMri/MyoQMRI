@@ -8,7 +8,7 @@ This project is an open-source effort to put together tools for quantitative MRI
 of the muscles. 
 Current features include:
 
-* multi echo spin echo sequence, written in PyPulseq
+* multi echo spin echo sequence, written in PyPulseq (v1.5.0)
 * fast water T2 mapping from multi echo spin echo images
 * fat water separation from 2 echo gradient echo data
 
@@ -55,19 +55,6 @@ deactivate
 
 ### Installation
 
-#### Install via PyPI
-
-MyoQMRI is on PyPI, you can easily install it via 
-
-```
-pip install myoqmri
-```
-if you have cuda, also install the optional dependencies
-
-```
-pip install myoqmri[cuda]
-```
-
 #### Download and install via GitHub (recommended)
 
 Alternatively, you can install MyoQMRI directly from GitHub.
@@ -99,11 +86,27 @@ pip install -e C:\path\to\folder\MyoQMRI
 ```
 
 
+#### Install via PyPI
+
+MyoQMRI is also on PyPI, you can easily install it via 
+
+```
+pip install myoqmri
+```
+if you have cuda, also install the optional dependencies
+
+```
+pip install myoqmri[cuda]
+```
+
+
 ## Multi-Echo Spin Echo Sequence
 
-For instructions on how to install the pulseq interpreter and bring the sequence 
+The `mese_leg.seq` sequence file can be directly used for data acquisition. For instructions on how to install the pulseq interpreter and bring the sequence 
 to the scanner, see 
-[https://github.com/pulseq/tutorials](https://github.com/pulseq/tutorials).  
+[https://github.com/pulseq/tutorials](https://github.com/pulseq/tutorials).
+
+### Adapting the sequence to your needs (optional)
 
 The sequence was developed for imaging of the thighs. In principle, however, 
 it is possible to easily adapt it for other body regions.  
@@ -117,13 +120,15 @@ the resolution the same)
 
 The `.seq` and `.json` file are written into the current working directory.
 
+There is also a Jupyter Notebook version of the `write_pulseq_mese_leg.py` in `PyPulseqSequence` with which you can play.
+
 ### Reconstruction
 
 Data from the `mese_leg.seq` is reconstructed offline.
 
 * Transfer the raw data from the scanner
 * rename the `.dat` file to the patient token of your choice
-* Copy `mese_leg.json` and `mese_leg.seq` into the same folder
+* Copy `mese_leg.json` and `mese_leg.seq` into the same folder as the `.dat` file
 * Run `raw2nii_pulseq_mese_leg /path/to/input/folder /path/to/output/folder`
 
 The code outputs a `.nii.gz` and an according `.json` file into an `/mr-anat` folder.
