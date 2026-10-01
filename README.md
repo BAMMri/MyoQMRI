@@ -12,11 +12,13 @@ Current features include:
 * fast water T2 mapping from multi echo spin echo images
 * fat water separation from 2 echo gradient echo data
 
+Disclaimer: As of now, everything here was only tested on Siemens data.
+
 ## Setup
 
 ### Virtual environment
 
-We recomment creating a virtual environment.  
+We recommend creating a virtual environment.  
 Do this with
 
 ```
@@ -29,11 +31,8 @@ If you are on Windows, this will look something like this:
 python -m venv C:\path\to\new\virtual\environment
 ```
 
-Depending on your distribution, you may need to use python3 instead of python as
-command.  
-If there are any problems concerning the creation of the virtual environment or
-its use, refer to:
-https://docs.python.org/3/library/venv.html
+Depending on your distribution, you may need to use python3 instead of python as command. If there are any problems concerning the creation of the virtual environment or
+its use, refer to: https://docs.python.org/3/library/venv.html
 
 To activate the virtual environment, run:
 
@@ -57,9 +56,8 @@ deactivate
 
 #### Download and install via GitHub (recommended)
 
-Alternatively, you can install MyoQMRI directly from GitHub.
-The git repository contains the compiled pulseq multi echo spin echo sequence, 
-all analysis tools and example data.  
+It is recommented to install MyoQMRI directly from GitHub. This will ensure you get the latest updates.
+The git repository contains the compiled pulseq multi echo spin echo sequence, all analysis tools and example data.  
 Download it via
 
 ```
@@ -103,13 +101,11 @@ pip install myoqmri[cuda]
 ## Multi-Echo Spin Echo Sequence
 
 The `mese_leg.seq` sequence file can be directly used for data acquisition. For instructions on how to install the pulseq interpreter and bring the sequence 
-to the scanner, see 
-[https://github.com/pulseq/tutorials](https://github.com/pulseq/tutorials).
+to the scanner, see [https://github.com/pulseq/tutorials](https://github.com/pulseq/tutorials).
 
 ### Adapting the sequence to your needs (optional)
 
-The sequence was developed for imaging of the thighs. In principle, however, 
-it is possible to easily adapt it for other body regions.  
+The sequence was developed for imaging of the thighs. In principle, however, it is possible to easily adapt it for other body regions.  
 For this,
 
 * Copy the `write_pulseq_mese_leg.py` file
@@ -127,7 +123,6 @@ There is also a Jupyter Notebook version of the `write_pulseq_mese_leg.py` in `P
 Data from the `mese_leg.seq` is reconstructed offline.
 
 * Transfer the raw data from the scanner
-* rename the `.dat` file to the patient token of your choice
 * Copy `mese_leg.json` and `mese_leg.seq` into the same folder as the `.dat` file
 * Run `raw2nii_pulseq_mese_leg /path/to/input/folder /path/to/output/folder`
 
@@ -139,10 +134,7 @@ The code outputs a `.nii.gz` and an according `.json` file into an `/mr-anat` fo
 </a>
 
 Dicom files need to be converted to the ormir-mids format.  
-For this, we use the ormir-mids converter (more information on 
-[https://github.com/ormir-mids/ormir-mids](https://github.com/ormir-mids/ormir-mids)).
-If you are working with the enhanced dicom format and are converting Dixon data, 
-see additional [step below](#additional-step-for-enhanced-dicom).
+For this, we use the ormir-mids converter (for more information see [https://github.com/ormir-mids/ormir-mids](https://github.com/ormir-mids/ormir-mids)).
 
 The conversion is done with:
 
@@ -152,37 +144,23 @@ dcm2omids -r -a PATIENT_ID /path/to/input/folder /path/to/output/folder
 
 Note: Output folder must exist.
 
-<a name="additional-step-for-enhanced-dicom">
+#### Additional step for fragmented data
 
-#### Additional step for enhanced dicom
-</a>
-
-If you are working with the old dicom format, you can ignore this step.
-
-As of now, for enhanced Dixon dicoms, we need a series_config.json file for the 
-converter to work properly.
-For this, each magnitude and phase 4D image needs to be in its own folder (see 
-example data folder structure).
-Copy the series_config.json file from the example data and edit it to 
-contain the according series number of your data. Afterwards, the conversion can 
-be executed like above.
+If one logical acquisition (which needs joining into one 4D volume) is spread across multiple series, we need to provide a `series_config.json` file to tell the converter which acquisitions belong to a group.
+This is the case for Dixon MEGRE, since the data is split into magnitude and phase data for each echo.
+Copy the `series_config.json` file from the example data and edit it to contain the according folder names (as in the example `series_config.json`) of your data or the series number of the acquisition (as in the `series_config_alternative.json` file).
+Note that the number in front of the folder name does not necessarily correspond to the series number (as is the case for the example data), depending on how the data was reconstructed and exported from the scanner.  
+Then, the conversion to ormir-mids can be executed as described above, the converter automatically looks for the `series_config.json` file in the input folder.
 
 ## T2 Mapping From Multi-Echo Spin Echo
 
-The main function is used to obtain **water T2** and **fat fraction** from
- multi-echo spin echo images as described in 
- [Marty et al. ](https://doi.org/10.1002/nbm.3459)
+The main function is used to obtain **water T2** and **fat fraction** from multi-echo spin echo images as described in  [Marty et al. ](https://doi.org/10.1002/nbm.3459)
 
-This implementation uses the GPU for the generation of a dictionary of 
-signals through [Extended Phase Graph simulation](https://doi.org/10.1002/jmri.24619).
+This implementation uses the GPU for the generation of a dictionary of signals through [Extended Phase Graph simulation](https://doi.org/10.1002/jmri.24619).
 
-Ideally, you should work with the ormir-mids format. See Section 
-[Prepare DICOM data](prepare-dicom-data) above for instructions. However, as of now,
-it is also possible to use the code with dicom images.
+Ideally, you should work with the ormir-mids format. See Section [Prepare DICOM data](prepare-dicom-data) above for instructions. However, as of now, it is also possible to use the code with dicom images.
 
-In case of dicom data, the dataset must be a directory containing 2D DICOM 
-images from a multiecho spin echo acquisition, ordered as 
-(slice1echo1 - slice2echo1 - ... - slice1echo2 - slice2echo2 - ...).
+In case of dicom data, the dataset must be a directory containing 2D DICOM images from a multiecho spin echo acquisition, ordered as (slice1echo1 - slice2echo1 - ... - slice1echo2 - slice2echo2 - ...).
 
 ### Usage
 
@@ -238,17 +216,11 @@ waterT2 --bids --path-is-nifti -n100 PATNAME_mese.nii.gz
 
 ### Slice profile
 
-An accurate slice profile is crucial to obtain accurate results. By default,
-a hanning-windowed sinc pulse is used, and the refocusing pulse has a 1.2x the
-slice width of the excitation pulses. This reflects the parameters of the
-standard Siemens Spin Echo sequence.
+An accurate slice profile is crucial to obtain accurate results. By default, a hanning-windowed sinc pulse is used, and the refocusing pulse has a 1.2x the slice width of the excitation pulses. This reflects the parameters of the standard Siemens Spin Echo sequence.
 
-External slice profile files can be provided. They are text files with angle
-values (in degrees) across half the profile (i.e. starting with ~90 or ~180 and
-decreasing), with one value per line.
+External slice profile files can be provided. They are text files with angle values (in degrees) across half the profile (i.e. starting with ~90 or ~180 and decreasing), with one value per line.
 
-Either none or both slice profiles must be given, and both slice arrays must
-contain the same number of samples.
+Either none or both slice profiles must be given, and both slice arrays must contain the same number of samples.
 
 Example:
 
@@ -266,9 +238,7 @@ Example:
 
 
 ## Fat Water Separation
-The 2 echo fat water separation uses an algorithm by the BMRR group in 
-Munich, which utilizes hirarchical multi-resolution graph-cuts (for more 
-information see 
+The 2 echo fat water separation uses an algorithm by the BMRR group in Munich, which utilizes hirarchical multi-resolution graph-cuts (for more information see 
 [https://github.com/BMRRgroup/2echo-WaterFat-hmrGC](https://github.com/BMRRgroup/2echo-WaterFat-hmrGC)).  
 
 ### Download and Install Package
@@ -309,6 +279,9 @@ pip install -e /path/to/folder/2echo-WaterFat-hmrGC
 ```
 fatwater -p path/to/folder
 ```
+
+
+
 
 ## Git repositories of the constituents
 
