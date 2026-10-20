@@ -1,6 +1,7 @@
 """
     This script computes fat and water images from 2-echo GRE data, using code
     which was developed by Jonathan Stelter et al.
+    It also computes the fat fraction map from these images.
     For details see:
     https://github.com/BMRRgroup/2echo-WaterFat-hmrGC for instructions
     
@@ -190,6 +191,9 @@ def main():
         fatmagn = abs(g.images['fat'])
         waterphase = np.angle(g.images['water'])
         fatphase = np.angle(g.images['fat'])
+        
+    # calculate fat fraction
+        fatfraction = fatmagn / (fatmagn + watermagn)
     
     # export as nifti
         pat_name = keys[i]
@@ -199,7 +203,7 @@ def main():
             os.makedirs(new_dir)
             print("Folder %s created!" % new_dir)
         else:
-            print("Folder %s already exists" % new_dir)
+            print("Folder %s already exists. Written to it" % new_dir)
 
         if ph == True:
             filename_water = pat_name + '_part-mag_WATER'
@@ -213,21 +217,29 @@ def main():
         else:
             filename_water = pat_name + '_WATER'
             filename_fat = pat_name + '_FAT'
+            filename_FF = pat_name + '_FF'
     
         nii_image = nib.Nifti1Image(watermagn, affine=affinematrix)
         nib.save(nii_image, os.path.join(new_dir, filename_water + '.nii.gz'))
         nii_image = nib.Nifti1Image(fatmagn, affine=affinematrix)
         nib.save(nii_image, os.path.join(new_dir, filename_fat + '.nii.gz'))
+        nii_image = nib.Nifti1Image(fatfraction, affine=affinematrix)
+        nib.save(nii_image, os.path.join(new_dir, filename_FF + '.nii.gz'))
     
         # write json file for this data
+        # TODO: json for FF
         metadata_water = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
         metadata_fat = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
+        metadata_FF = copy.deepcopy(data[keys[i]]["magnitude"]['metadata'])
         metadata_water['PulseSequenceType'] = 'Water Map'
         metadata_fat['PulseSequenceType'] = 'Fat Map'
+        metadata_FF['PulseSequenceType'] = 'Fat Fraction Map'
         with open(os.path.join(new_dir, filename_water + '.json'), 'w') as f:
                 json.dump(metadata_water, f, indent=2)
         with open(os.path.join(new_dir, filename_fat + '.json'), 'w') as f:
                 json.dump(metadata_fat, f, indent=2)
+        with open(os.path.join(new_dir, filename_FF + '.json'), 'w') as f:
+                json.dump(metadata_FF, f, indent=2)
         if ph == True:
             with open(os.path.join(new_dir, filename_water_phase + '.json'), 'w') as f:
                     json.dump(metadata_water, f, indent=2)
