@@ -97,6 +97,8 @@ if you have cuda, also install the optional dependencies
 pip install myoqmri[cuda]
 ```
 
+Note that the version on PyPI might not be up to date.
+
 
 ## Multi-Echo Spin Echo Sequence
 
@@ -260,7 +262,7 @@ pip install -e /path/to/folder/2echo-WaterFat-hmrGC
 
     usage: fatwater path_in path_out [-h] [-e ECHONUMS ECHONUMS] [-c FATSHIFT [FATSHIFT ...]] [-a RELAMPS [RELAMPS ...]] [-ph]
 
-    Compute fat/water images from dual echo data
+    Compute fat/water images and a fat fraction map from dual echo data
 
     options:
       -h, --help            show this help message and exit
@@ -277,10 +279,49 @@ pip install -e /path/to/folder/2echo-WaterFat-hmrGC
 #### Example
 
 ```
-fatwater -p path/to/folder
+fatwater path/to/input/folder path/to/output/folder
 ```
 
+## Usage Example for complete analysis workflow
 
+Here, we demonstrate the workflow of the proposed pipeline. This can be reproduced and tested by using the data in the `example_data` folder. However, note that there is no raw data contained in the `example_data` due to its large file size. Instead, we included the already reconstructed MESE data in the folder `sub-01` so you can follow the rest of the pipeline.
+It is assumed that you already installed everything as described above.
+The example uses Linux file structure. If you are on Windows, you need to adjust the file paths accordingly (e.g. `C:\Users\user\UsageExample`).
+
+In our example, all data is stored in the folder `/home/user/UsageExample`. It contains:
+* raw data file from the PyPulseq MESE sequence: `PATIENT.dat`
+* the `mese_leg.seq` and `mese_leg.json` files
+* a folder `PATIENT_megre` containing the MEGRE data (in this case 2-point-Dixon from a Siemens sequence) and the apropriate `series_config.json` file
+
+First, we use the reconstruction script to reconstruct the MESE data and save it in the ORMIR-MIDS format.
+For this, the raw data needs to be stored in a folder together with the `mese_leg.seq` and `mese_leg.json` files. The reconstruction script reads the sequence trajectory from the `.seq` file and sequence parameters from the `.json` file.
+We can run:
+
+```
+raw2nii_pulseq_mese_leg 01 /home/user/UsageExample /home/user/UsageExample
+```
+The first argument is the identification number of the patient, the second argument provides the path to the folder containing the data, the third argument is the folder to which you want to store the result. Note that the output folder must exist.
+This will create a `sub-01/mr-anat` folder (if it does not exist yet) within the target folder containing a `sub-01_MESE.nii.gz` and a `sub-01_MESE.json` file.  
+Furthermore, we need to convert the dicom Dixon data into ORMIR-MIDS as well.
+In addition to the folders containing the magnitude and phase images of the two echoes, we need a `series_config.json` file, which lists the according folder names or the series number of the acquisition (both options are shown in the two provided `series_config.json`  files).
+The conversion is done by running
+
+```
+dcm2omids -r -a 01 /home/user/UsageExample/PATIENT_megre /home/user/UsageExample/
+```
+The `-r` allows a recurse into subfolders, the `-a` enables the use of an anonymized name, in this case `01` as also used above for the MESE data. The other arguments are the same as above. This will (again) create a `sub-01/mr-anat` folder (if it does not exist yet) containing the nifti files for the magnitude (`sub-01_MEGRE.nii.gz`)and phase (`sub-01_part-phase_MEGRE.nii.gz`) images, as well as json files containing meta information.  
+
+For the T2 computation we run
+```
+waterT2 --bids --path-is-nifti mr-anat/sub-01_MESE.nii.gz
+```
+on the MESE data. The fat fraction and T2 maps will be saved into an `mr-anat/mr-quant` folder, which will be generated if it does not exist. Note that this folder is generated (or must exist) in the directory from which the script is executed. This means, you need to execute the script from the `sub-01` folder. Also note that you can ignore the warning `Warning: signals could not be saved`.
+
+For the fat fraction, we need to compute fat and water images from the Dixon data. For the basic computation run
+```
+fatwater /home/user/UsageExample/sub-01/mr-anat /home/user/UsageExample/sub-01/mr-anat
+```
+This outputs a fat image, a water image and a fat fraction map. Everything will, again, be saved into an `mr-anat/mr-quant` folder.
 
 
 ## Git repositories of the constituents
